@@ -2,18 +2,20 @@ The code in this folder implements a new conversion approach, which is supposed 
                                                    EXP => NWB
 The distinctive features of the new approach are:
 - splitting the conversion project aimed at producing a single target NWB file 
-  into a number of "elementary" tasks, which of which can be performed 
+  into a number of "elementary" tasks, each of which can be performed 
   independently. Each the task produces a "partial" NWB file, where only a 
-  certain group or subset of nested groups of the target NWB file is populated 
-  with datasets, and the rest of the groups are either missing or empty;
+  certain group or subset of nested groups of the target NWB file will be created 
+  and populated with datasets, and the rest of the groups are either missing or 
+  empty;
 - each the "elementary" task is performed in two steps:
   1) (exp2dict): given experimental data, create a Python dictionary, where the 
                  keys are the full paths to datasets or attributes in the target 
                  NWB file, and the values are the contents of the datasets or 
                  attributes; and
-  2) (dict2nwb): make use of the dictionary to produce a "partial" NWB file.
-- the "partial" NWB files are stored in a project folder and named according to 
-  the portion of the NWB file they produce. They can be easily reviewed using 
+  2) (dict2nwb): given information stored in a dictionary, produce a "partial" 
+                 NWB file.
+- the "partial" NWB files are stored in a project folder, named according to 
+  the portion of the NWB file they produce and can be easily reviewed using 
   the HDF viewer. For example, the "partial" NWB file where only datasets in the 
   folder with path .general/subject. are populated will be named 
   "general.subject.h5" (i.e. with the "slash" in the path replaced by "dot"). 
