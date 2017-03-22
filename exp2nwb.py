@@ -19,6 +19,8 @@ import numpy as np
 from sets import Set
 import re 
 import optparse
+import shutil
+
 import libh5 
 import libexp2dict
 import libdict2nwb
@@ -26,11 +28,10 @@ import libdict2nwb
 # ------------------------------------------------------------------------------
 
 def make_nwb_command_line_parser(parser):
-    parser.add_option("-a", "--run_all", action="store_true",dest="run_all", help="create/assemble all project files", default=False)
     parser.add_option("-d", "--project_dir", dest="project_dir", help="project directory name", default="")
-    parser.add_option("-D", "--debug",   action="store_true",  dest="debug", help="output debugging info", default=False)
+    parser.add_option("-D", "--debug",   action="store_true",  dest="debug", help="output debugging info; don't delete project dir", default=False)
     parser.add_option("-e", "--no_error_handling", action="store_false", dest="handle_errors", help="handle_errors", default=True)
-    parser.add_option("-p", "--pathstr", dest="path_str", help="dot-separated path string",metavar="path_str",default="")
+    parser.add_option("-s", "--pathstr", dest="path_str", help="dot-separated path string",metavar="path_str",default="")
     parser.add_option("-r", "--replace", action="store_true", dest="replace", help="if output file exists, replace it", default=False)
     parser.add_option("-v", "--verbose", action="store_true", dest="verbose", help="increase the verbosity level", default=False)
 
@@ -156,15 +157,28 @@ def produce_partial_nwb(data_path, metadata_path, options):
     libdict2nwb.make_h5(options.path_str, dict, options.project_dir)
 
 # ------------------------------------------------------------------------------
+
+def extract_attrs(attr_pointer):
+    attrs = {}
+    for k in attr_pointer.keys():
+        if not k in ["neurodata_type", "help", "interval", "ancestry"]:
+            attrs[k] = attr_pointer[k]
+    return attrs
+
+# ------------------------------------------------------------------------------
+
 #
 # Recursively parse the group tree  in the H5 object
 # and copy its contents to the NWB object
 #
-def update_nwb_object(last_item, curr_nwb_group, curr_h5_path, h5_object, nwb_object):   
+def update_nwb_object(last_item, curr_nwb_group, curr_h5_path, h5_object, nwb_object):  
+    update_object = 1
     if hasattr(h5_object[curr_h5_path], '__dict__'):
         # Current path in h5_data points to a group    
         for k in h5_object[curr_h5_path].keys():
             curr_h5_path1 = curr_h5_path + "/" + str(k)
+            my_attrs = extract_attrs(h5_object[curr_h5_path1].attrs)
+#           print "curr_h5_path=", curr_h5_path, " k=", k, " my_attrs=", my_attrs
             num_keys = 0
             try:
                 num_keys = len(h5_object[curr_h5_path1].keys())
@@ -172,41 +186,65 @@ def update_nwb_object(last_item, curr_nwb_group, curr_h5_path, h5_object, nwb_ob
                 num_keys = 0
             if num_keys == 0:
                 # Item is a dataset
+#               print "    Item is a dataset"
+                if k in ["nwb_core.py"]:
+                    continue
                 try:
-                    curr_nwb_group.set_dataset(str(k), np.array(h5_object[curr_h5_path1]))
+                    if len(my_attrs.keys()) > 0:
+                        curr_nwb_group.set_dataset(str(k), np.array(h5_object[curr_h5_path1]), attrs=my_attrs, abort=False)
+                    else:
+                        curr_nwb_group.set_dataset(str(k), np.array(h5_object[curr_h5_path1]), abort=False)
                 except:
                     curr_nwb_group.set_custom_dataset(str(k), np.array(h5_object[curr_h5_path1]))
             else:
+#               print "    Item is a group"
                 # Next-level item is a group
 #               assert(len(h5_object[curr_h5_path1].keys()) > 0)
-                if not last_item == "top_datasets":
-                    if re.search("shank", k):
-                        curr_nwb_group1 = curr_nwb_group.make_group("<electrode_group_X>", str(k), abort=False)
-                    elif re.search("site_", k):
-                        curr_nwb_group1 = curr_nwb_group.make_group("<site_X>", name=str(k), abort=False)
-                    elif re.search("trial_", k):
-                        curr_nwb_group1 = curr_nwb_group.make_group("<epoch_X>", name=str(k), abort=False)
-                    elif re.search("unit", k) and re.search("EventWaveform", curr_h5_path):
-                        curr_nwb_group1 = curr_nwb_group.make_group("<SpikeEventSeries>", name=str(k), abort=False)
-                    elif re.search("unit", k) and re.search("UnitTimes", curr_h5_path):
-                        curr_nwb_group1 = curr_nwb_group.make_group("<unit_N>", name=str(k), abort=False)
-                    elif re.search("fov_", k) and re.search("timeseries", curr_h5_path):
-                        curr_nwb_group1 = nwb_object.make_group("<TwoPhotonSeries>", name=str(k),\
-                                           path='/acquisition/timeseries')
-                    elif re.search("fov_", k) and re.search("DfOverF", curr_h5_path):
-                        curr_nwb_group1 = curr_nwb_group.make_group("<RoiResponseSeries>", name=str(k), abort=False)
-                    elif re.search("fov_", k):
-                        curr_nwb_group1 = curr_nwb_group.make_group("<imaging_plane_X>", name=str(k), abort=False)
-                    elif re.search("channel_", k):
-                        curr_nwb_group1 = curr_nwb_group.make_group("<channel_X>", name=str(k), abort=False)
-                    else:
-                        curr_nwb_group1 = curr_nwb_group.make_group(str(k), path = curr_h5_path, abort=False)
+                try:
+                    ancestry = "<" + h5_object[curr_h5_path1].attrs["ancestry"][-1] + ">"
+                except:
+                    ancestry = ""
+#               print "ancestry=", ancestry, " k=", k, " curr_h5_path1=", curr_h5_path1, " attrs=", my_attrs
+                if len(ancestry) > 0:
+                   try:
+                       curr_nwb_group1 = nwb_object(ancestry, str(k), \
+                                             path=curr_h5_path, attrs=my_attrs, abort=False)
+                   except:
+                       try:
+                           curr_nwb_group1 = curr_nwb_group.make_group(ancestry, str(k), \
+                                                 attrs=my_attrs, abort=False)
+                       except:
+                           try:
+                               curr_nwb_group1 = curr_nwb_group.make_group(ancestry, str(k), abort=False)
+                           except:
+                               update_object = 0
+                               try:
+                                   nwb_object.create_group(curr_h5_path)
+                               except:
+                                   # Group already exists
+                                   pass
+                               h5_object.copy(curr_h5_path1, nwb_object.file_pointer[curr_h5_path])
+                else:  
+                   try: 
+                       curr_nwb_group1 = curr_nwb_group.make_group(str(k), \
+                                         attrs=extract_attrs(h5_object[curr_h5_path].attrs), abort=False)
+                   except:
+                       update_object = 0
+                       try:
+                           nwb_object.create_group(curr_h5_path)
+                       except:
+                           # Group already exists
+                           pass
+                       h5_object.copy(curr_h5_path1, nwb_object.file_pointer[curr_h5_path])
+                if update_object:
                     nwb_object = update_nwb_object(last_item, curr_nwb_group1, curr_h5_path1, h5_object, nwb_object)
     else:
         # Current path in h5_data points to a dataset
         path_items = curr_h5_path.split("/")
         upper_level_path = "/".join(path_items[0:-1])
-        nwb_object.file_pointer[upper_level_path].create_dataset(k, data = np.array(h5_object[curr_h5_path]))
+        nwb_object.file_pointer[upper_level_path].create_dataset(k, data = np.array(h5_object[curr_h5_path], \
+            attrs=extract_attrs(h5_object[curr_h5_path].attrs)))
+#       print " dataset=", curr_h5_path, " attrs=", h5_object[curr_h5_path].attrs.keys()
     return nwb_object
 
 # ------------------------------------------------------------------------------
@@ -266,7 +304,7 @@ def assemble_nwb_from_partial_files(project_dir, options):
                 curr_nwb_group = nwb_object.make_group("<Module>", groups[i], abort=False)     
             elif re.search("/processing/", curr_h5_path):
                 if groups[i] in ["BehavioralEvents", "BehavioralTimeSeries",\
-                                 "DfOverF", "ImageSegmentation"]:
+                                 "DfOverF", "ImageSegmentation", "EventWaveform", "UnitTimes"]:
                     curr_nwb_group = curr_nwb_group.make_group(groups[i], abort=False)
                 else:
                     group_path = curr_h5_path + "/" + groups[i]
@@ -289,7 +327,7 @@ def assemble_nwb_from_partial_files(project_dir, options):
         nwb_object = update_nwb_object(last_group, curr_nwb_group, curr_h5_path, data_h5, nwb_object)            
 
     nwb_object.close()
-
+    
 # ------------------------------------------------------------------------------
 
 def create_and_assemble_all_partial_files(data_path, metadata_path, options):
@@ -304,6 +342,7 @@ def create_and_assemble_all_partial_files(data_path, metadata_path, options):
     task_strings = ["top_datasets", \
                     "analysis",\
                     "analysis", \
+                    "epochs", \
                     "general.devices", \
                     "general.subject", \
                     "general.top_datasets"]
@@ -347,7 +386,7 @@ def create_and_assemble_all_partial_files(data_path, metadata_path, options):
     for s in range(len(task_strings)):
 #       print "\nstring= ", task_strings[s]
         command = "/home/denisovg/work/Karel_Svoboda/exp2nwb.py " + data_path + " " + metadata_path + " " 
-        command += " -p " + task_strings[s] + " -d " + options.project_dir
+        command += " -s " + task_strings[s] + " -d " + options.project_dir
         if options.verbose:
             print "Running command: " + command
         os.system(command)
@@ -355,13 +394,15 @@ def create_and_assemble_all_partial_files(data_path, metadata_path, options):
     # Assemble all
     print "\nStaring assembly of the partial files...\n"
     os.system("python exp2nwb.py " + options.project_dir)
+    if not options.debug:
+        shutil.rmtree(options.project_dir)
 
 # ------------------------------------------------------------------------------
 
 def check_path_string(path_str):
     print "\npath_str=", path_str
     if len(path_str) == 0:
-        sys.exit("\nPlease, specify a path string with option -p")
+        sys.exit("\nPlease, specify a path string with option -s")
     if path_str not in ["acquisition.timeseries", "acquisition.timeseries.extracellular_traces",\
                         "analysis", "epochs", "general", \
                         "processing", "stimulus", "top_datasets", \
@@ -370,7 +411,7 @@ def check_path_string(path_str):
                         "general.extracellular_ephys", "general.optogenetics",\
                         "general.optophysiology", "general.subject"] \
        and not re.search("acquisition.timeseries", path_str):
-        sys.exit("\nPlease, specify a correct path string with option -p")
+        sys.exit("\nPlease, specify a correct path string with option -s")
 
 # ------------------------------------------------------------------------------
 
@@ -404,7 +445,7 @@ if __name__ == "__main__":
             if not re.search(".h5", metadata_path):
                 sys.exit("\nScript make_mwb.py accepts as input .h5 metadata file")
         
-        if options.run_all:
+        if not os.path.isdir(args[0]) and len(options.path_str) == 0:
             create_and_assemble_all_partial_files(data_path, metadata_path, options) 
         else:
             options.data_path = data_path
