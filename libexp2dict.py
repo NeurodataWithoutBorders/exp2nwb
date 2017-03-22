@@ -148,9 +148,17 @@ def compute_age(DOB, DOE):
 
 # ------------------------------------------------------------------------------
 
-def metadata_from_file(file_name):
-    file_path = os.path.join(os.environ['NWB_DATA'],file_name)
-    description = nwb_utils.load_file(file_path)
+def metadata_from_file(file_name, options):
+    if os.environ['NWB_DATA'] is not None:
+        file_path = os.path.join(os.environ['NWB_DATA'],file_name)
+    else:
+        data_dir = os.path.join(",".join(options.data_path.split("/")[0:-1]))
+        file_path = os.path.join(data_dir, file_name)
+    description = " "
+    if os.path.isfile(file_path):
+        description = nwb_utils.load_file(file_path)
+    else:
+        print "Warning: missing file " + file_name
     return description   
 
 # ------------------------------------------------------------------------------
@@ -165,8 +173,8 @@ def top_datasets(data_h5, meta_h5, options):
                               "plus pole and auditory stimulus"
     else:
         vargs["start_time"] = find_exp_time(data_h5, options)
-        vargs["description"]= "Experiment description (to be added)"
-        print("Missing experioment description ")
+        vargs["description"]= " "
+        print("Warning: missing experiment description (to be added)")
     vargs["file_name"]      = os.path.join(options.project_dir, "top_datasets.h5")
     vargs["identifier"]     = nwb_utils.create_identifier(options.project_dir)
     vargs["mode"] = "w"
@@ -298,7 +306,7 @@ def general(input_h5, options):
                             coord += "\natlas location: " + str(value1["photostimLocation"][s]) 
                         dict_metadata["general.optogenetics.site_" + str(s+1) + ".location" ] = coord
                     elif key1 == "photostimWavelength":
-                        dict_metadata["general.optogenetics.site_" + str(s+1) + ".excitation_lambda"] = value1[key1][0]
+                        dict_metadata["general.optogenetics.site_" + str(s+1) + ".excitation_lambda"] = str(value1[key1][0])
                     
         else:
             if "metaDataHash" in libh5.get_child_group_names(input_h5) \
@@ -397,9 +405,9 @@ def general(input_h5, options):
     source_script="https://github.com/NeurodataWithoutBorders/exp2nwb"
     dict_metadata["source_script"] = source_script
     if options.data_origin == "NL":
-        dict_metadata["surgery"]                = metadata_from_file("surgery.txt")
-        dict_metadata["data_collection"]        = metadata_from_file("data_collection.txt")
-        dict_metadata["experiment_description"] = metadata_from_file("experiment_description.txt")
+        dict_metadata["surgery"]                = metadata_from_file("surgery.txt", options)
+        dict_metadata["data_collection"]        = metadata_from_file("data_collection.txt", options)
+        dict_metadata["experiment_description"] = metadata_from_file("experiment_description.txt", options)
     elif options.data_origin == "SP":
         dict_metadata["data_collection"]       ="doi: 10.1016/j.neuron.2015.03.027"
         dict_metadata["experiment_description"]="doi: 10.1016/j.neuron.2015.03.027"
@@ -676,7 +684,6 @@ def collect_analysis_information(data_h5, options):
 # collect unit information for a given trial
 epoch_units = {}
 def get_trial_units(data_h5, unit_num, options):
-    print "unit_num=", unit_num
     for i in range(unit_num):
         i = i+1
         unit = "unit_%d%d" % (int(i/10), i%10)
@@ -698,23 +705,24 @@ def get_trial_units(data_h5, unit_num, options):
 
 def create_epochs(data_h5, options):
     dict = {}
-
-    print("    Getting trial types ...")
+    
+    if options.verbose:
+        print("    Getting trial types ...")
     get_trial_types(data_h5, options)
 
     if options.data_origin in ["NL", "DG"]:
-        print("    Getting trial units ...")
         keys = data_h5['eventSeriesHash/value'].keys()
-        print "\n\nkeys=", data_h5['eventSeriesHash/value'].keys(), " len(keys)=", len(keys)
-        print "options.data_origin=", options.data_origin
+        if options.verbose:
+            print("    Getting trial units ...")
+        keys = data_h5['eventSeriesHash/value'].keys()
         if options.data_origin == "NL":
             unit_num = len(keys)
         else:
             unit_num = 1
-        print "unit_num=", unit_num
         get_trial_units(data_h5, unit_num, options)
 
-    print("    Creating trials ...")
+    if options.verbose:
+        print("    Creating trials ...")
     dict = create_trials(dict, data_h5, options)
 
     return dict
@@ -735,8 +743,8 @@ def get_trial_types(data_h5, options):
         # SP data
         valid_whisker = get_valid_trials(data_h5, "whisker", options)
         valid_Ca      = get_valid_trials(data_h5, "Ca", options)
-        print "valid_whisker=", valid_whisker
-        print "valid_Ca=", valid_Ca
+#       print "valid_whisker=", valid_whisker
+#       print "valid_Ca=", valid_Ca
     elif options.data_origin == "JY":
         # JY data
         trial_types = libh5.get_value_by_key(data_h5["trialPropertiesHash"], 'TrialName')
@@ -779,6 +787,65 @@ def get_trial_types(data_h5, options):
 
 # ------------------------------------------------------------------------------
 
+def create_trial_roi_map(orig_h5, plane_map, options):
+    epoch_roi_list   = {}
+    epoch_roi_planes = {}
+    num_subareas = len(orig_h5['timeSeriesArrayHash/descrHash'].keys()) - 1
+    for i in range(num_subareas):
+        area = i + 1
+        grp_name = "timeSeriesArrayHash/value/%d" % (area + 1)
+        block = orig_h5[grp_name]
+        trials = block["trial/trial"].value
+        ids = block["ids/ids"].value
+        # create way to map ROI onto plane
+        planemap = {}
+        plane_path = 'timeSeriesArrayHash/descrHash/%d/value/1' %(area + 1)
+        if orig_h5[plane_path].keys()[0] == 'masterImage':
+            num_planes = 1
+        else:
+            num_planes = len(orig_h5[plane_path].keys())
+        if num_planes > 1:
+            print("  Warning: in create_trial_roi_map num_planes == 1")
+
+        for j in range(num_planes):
+            plane = j + 1
+            try:
+                grp_name = "imagingPlane/%d/ids/ids" % plane
+                plane_id = block[grp_name].value
+            except:
+                print("Warning: only one imaging plane detected for area " + str(area))
+                grp_name = "imagingPlane/ids/ids"
+                plane_id = block[grp_name].value
+            for k in range(len(plane_id)):
+                planemap["%d"%plane_id[k]] = "%d" % plane
+        trial_list = {}
+        for j in range(len(trials)):
+            tid = trials[j]
+            name = "trial_%d%d%d" % (int(tid/100), int(tid/10)%10, tid%10)
+            if name not in trial_list:
+                trial_list[name] = j
+        for trial_name in trial_list.keys():
+            roi_list = []
+            plane_list = []
+#           valid_whisker = get_valid_trials(orig_h5, "whisker", options)
+#           valid_Ca = get_valid_trials(orig_h5, "Ca", options)
+            for k in range(len(ids)):
+                roi = "%d" % ids[k]
+                plane = int(planemap[roi])
+                # convert from file-specific area/plane mapping to
+                #   inter-session naming convention
+                #imaging_plane = "area%d_plane%d" % (area, plane)
+                oname = "area%d_plane%d" % (area, plane)
+                imaging_plane = plane_map[oname]
+                s = "processing/ROIs/DfOverF/%s/%s" % (imaging_plane, roi)
+                roi_list.append(ids[k])
+                plane_list.append(imaging_plane)
+            epoch_roi_list[trial_name] = roi_list
+            epoch_roi_planes[trial_name] = plane_list
+    return (epoch_roi_list, epoch_roi_planes)
+
+# ------------------------------------------------------------------------------
+
 def create_trials(dict, data_h5, options):
     trial_id = data_h5["trialIds/trialIds"].value
     if options.verbose:
@@ -803,6 +870,9 @@ def create_trials(dict, data_h5, options):
             stimulus_types = np.array(libh5.get_value_by_key(hash_group_pointer2, keyName3)).tolist()
             count_1 = stimulus_types.count(1)
             count_2 = stimulus_types.count(2)
+    elif options.data_origin == "SP":
+        plane_map = create_plane_map(data_h5, options)
+        epoch_roi_list,epoch_roi_planes = create_trial_roi_map(data_h5, plane_map, options)
     elif options.data_origin == "DG":
         good_trials = data_h5['trialPropertiesHash/value/5/5'].value
     elif options.data_origin in ["JY"]:
@@ -966,37 +1036,8 @@ def update_dict_master_shape(data_h5, master_shape, plane_map, area, \
 # masterImages are store in:
 #        tsah::descrHash::[2-7]::value::1::[1-3]::masterImage
 # each image has 2 color channels, green and red
-def update_reference_images(data_h5, dict, master_shape, \
-                            ref_image_red, ref_image_green, plane_map, area, \
-                            plane, options, num_plane = 3):
-    area_grp = data_h5["timeSeriesArrayHash/descrHash"]["%d"%(1+area)]
-    if num_plane == 1:
-        plane_grp = area_grp["value/1"]
-    else:
-        plane_grp = area_grp["value/1"]["%d"%(plane)]
-    master = plane_grp["masterImage"]["masterImage"].value
-    master1_shape = np.array(master).shape
 
-    if len(master1_shape) == 3 or not options.handle_errors:
-        green = np.squeeze(master[:,:,0])
-        red   = np.squeeze(master[:,:,1])
-    else:
-        green = master
-        red   = master
-
-    # convert from file-specific area/plane mapping to
-    #   inter-session naming convention
-    oname = "area%d_plane%d" % (area, plane)
-    master_shape[oname] = master1_shape
-    image_plane = plane_map[oname]
-    ref_image_green[image_plane] = green
-    ref_image_red[image_plane] = red
-
-    return (master_shape, ref_image_red, ref_image_green)
-
-# ------------------------------------------------------------------------------
-
-def extract_reference_images(plane_map, num_subareas, data_h5, options):
+def create_reference_images(plane_map, num_subareas, data_h5, options):
     master_shapes   = {}
     ref_images_red   = {}
     ref_images_green = {}
@@ -1011,7 +1052,7 @@ def extract_reference_images(plane_map, num_subareas, data_h5, options):
             if num_planes == 1:
                 plane_grp = area_grp["value/1"]
             else:
-                plane_grp = area_grp["value/1"]["%d"%(plane)]
+                plane_grp = area_grp["value/1"]["%d"%(plane+1)]
             master = plane_grp["masterImage"]["masterImage"].value
             master_shape = np.array(master).shape
 
@@ -1370,7 +1411,7 @@ def acquisition_timeseries_extracellular_traces(data_h5, options):
         fname = "voltage_filename" + os.path.basename(options.data_path)[13:-3] + ".mat"
     elif options.data_origin == "DG":
         fname = "voltageTraces_" + os.path.basename(options.data_path)[0:-3] + ".mat"
-    dict["acquisition.timeseries.excttacellular_traces"] = fname
+    dict["acquisition.timeseries.extracellular_traces"] = fname
     return dict
 
     return dict
@@ -1444,7 +1485,8 @@ def processing_ROIs_ImageSegmentation(data_h5, options):
     dict = {}
     plane_map = create_plane_map(data_h5, options)
     num_subareas = len(libh5.get_key_list(data_h5['timeSeriesArrayHash'])) - 1
-    master_shape = extract_dict_master_shape(data_h5, plane_map, options, num_planes = 3)
+    master_shape, ref_images_red, ref_images_green = \
+        create_reference_images(plane_map, num_subareas, data_h5, options)
     path = "processing.ROIs.ImageSegmentation."
     dict[path + "group_attrs"] = {"source" : "This module's ImageSegmentation interface"}
     for subarea in range(num_subareas):
@@ -1458,14 +1500,20 @@ def processing_ROIs_ImageSegmentation(data_h5, options):
             oname = "area%d_plane%d" % (subarea+1, plane+1)
             master1_shape = master_shape[oname]
             image_plane = plane_map[oname]
+            ref_image_red   = ref_images_red[image_plane]
+            ref_image_green = ref_images_green[image_plane]
             dict[path + image_plane + ".imaging_plane_name"] = image_plane
-            dict[path + image_plane + ".description"] = image_plane
+            dict[path + image_plane + ".description"]        = image_plane
+            dict[path + image_plane + ".ref_image_red"]      = ref_image_red
+            dict[path + image_plane + ".ref_image_green"]    = ref_image_green
             try:
                 ids = tsah["value"]["%d"%(subarea+2)]["imagingPlane"][str(plane+1)]["ids"]
             except:
                 ids = tsah["value"]["%d"%(subarea+2)]["imagingPlane"]["ids"]
             roi_ids = ids["ids"].value
+            dict[path + image_plane + ".roi_ids"] = np.array(roi_ids)
             for i in range(len(roi_ids)):
+                rid = roi_ids[i]
                 if num_planes == 1:
                     rois = tsah["descrHash"]["%d"%(subarea+2)]["value"]["1"]
                 else:
@@ -1484,9 +1532,10 @@ def processing_ROIs_ImageSegmentation(data_h5, options):
                     px = int(v  / master1_shape[1])
                     py = int(v) % master1_shape[0]
                     pixmap.append([py,px])
-                dict[path + image_plane + "." + str(i) + ".weight"] = np.zeros(len(pixmap)) + 1.0
-                dict[path + image_plane + "." + str(i) + ".pixmap"] = np.array(pixmap).astype('uint16')
-                dict[path + image_plane + "." + str(i) + ".master1_shape"] = master1_shape
+                dict[path + image_plane + "." + str(rid) + ".x"]      = x
+                dict[path + image_plane + "." + str(rid) + ".weight"] = np.zeros(len(pixmap)) + 1.0
+                dict[path + image_plane + "." + str(rid) + ".pixmap"] = np.array(pixmap).astype('uint16')
+                dict[path + image_plane + "." + str(rid) + ".master1_shape"] = master1_shape
     return dict
 
 # ------------------------------------------------------------------------------
@@ -1982,7 +2031,7 @@ def stimulus_presentation_pole_timeseries(series_name, data_h5, options):
             timestamps = time + trial_start_times
             data = [1] * len(timestamps)
             description = libh5.get_description_by_key(hash_group_pointer, keyName)
-            data_attrs  = {"keyName" : keyName}
+            data_attrs  = {"keyName" : keyName, "unit" : "sec"}
             group_attrs = {"source": source, "description" : description, \
                            "series_type" : "<TimeSeries>"}
         elif series_name == "pole_out":
@@ -1994,7 +2043,7 @@ def stimulus_presentation_pole_timeseries(series_name, data_h5, options):
             timestamps = time + trial_start_times
             data = [1] * len(timestamps)
             description = libh5.get_description_by_key(hash_group_pointer, keyName)
-            data_attrs  = {"keyName" : keyName}
+            data_attrs  = {"keyName" : keyName, "unit" : "sec"}
             group_attrs = {"source": source, "description" : description, \
                            "series_type" : "<TimeSeries>"}
     else:
@@ -2089,7 +2138,7 @@ def stimulus_presentation_photostimulus_timeseries(data_h5, meta_h5, options):
                    "source" : "Nuo's data file", \
                    "series_type" : "<OptogeneticSeries>"}
     data_attrs = {"resolution":float('nan'), "unit":"mW", "conversion":1000.0, \
-                  "keyName" : keyName2}
+                  "keyName" : keyName2, "source" : "Nuo's data file"}
 
     if options.verbose:
         print("    num_traces="  + str(num_traces))
@@ -2104,8 +2153,7 @@ def stimulus_presentation_photostimulus_timeseries(data_h5, meta_h5, options):
                 dict[series_path + ".timestamps"]  = timestamps
                 dict[series_path + ".data"]        = traces[s]  
                 dict[series_path + ".num_samples"] = len(timestamps)
-                dict[series_path + ".site_" + str(trace_types[s])] = coord + " in mm\natlas location: " + loc
-                dict[series_path + ".loc"]         = loc
+                dict[series_path + ".site"] = str(coord + " in mm\natlas location: " + loc)
                 dict[series_path + ".data_attrs"]   = data_attrs
                 dict[series_path + ".group_attrs"]  = group_attrs
             except:
