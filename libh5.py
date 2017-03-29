@@ -49,8 +49,6 @@ def get_value_by_key(hash_group_pointer, key):
         print "                                    key=", key
     key_list = get_key_list(hash_group_pointer)
     if verbose:
-        print "key=", key, " key_list=", key_list
-    if verbose:
         print "In get_value_by_key: partial_key=", key, " key_list=", key_list
     key_name = ""
     for k in key_list:
@@ -120,7 +118,7 @@ def get_value2_by_key2(hash_group1_pointer, key1, hash_group2, key2):
         print "\n                   value_group.keys()=", value_group.keys()
         print "\nlen(value_group.keys())=", len(value_group.keys()), " ind=", ind
         print "In get_value2_by_key2: level2 key_list=", value_group.keys()
-        print "str(ind+1)=", str(ind+1), " value_group.keys()=", value_group.keys()
+#   print "str(ind+1)=", str(ind+1), " value_group.keys()=", value_group.keys()
     if str(ind+1) in value_group.keys():
         value_pointer = value_group[str(ind+1)]
     else:
@@ -159,9 +157,9 @@ def get_value_pointer_by_path_items(orig_h5, path_items):
         iter_len = len(path_items)
         i = 0
         while i < iter_len:
-            if verbose:
-                print "   item=", path_items[i]
             if path_items[i] in orig_h5[path].keys():
+                if verbose:
+                    print "Case 1, item=", path_items[i]
                 path += '/' + str(path_items[i])
                 if verbose:
                     print "Case1, path=", path
@@ -172,11 +170,16 @@ def get_value_pointer_by_path_items(orig_h5, path_items):
                         if verbose:
                             print "dataset_shape=", value_pointer.shape
                         if value_pointer.shape[0] > 1:
-                            value = np.transpose(np.array(value_pointer)).tolist()
+                            value = np.transpose(value_pointer)
                         else:
-                            value = np.array(value_pointer).tolist()
+                            value = np.array(value_pointer)
                         if verbose:
-                            print "data=", value
+                            print "data=", value, " data_len=", len(value), " dataset_shape=", value.shape, \
+                                  " i=", i, " iter_len=", iter_len
+                        if i == iter_len - 2:
+                            return value[int(path_items[i+1])]
+                        elif i == iter_len - 3:
+                            return value[int(path_items[i+1])][int(path_items[i+2])]
                         return value
             else:
                 iter_len = len(path_items) + 1
@@ -273,8 +276,8 @@ def get_value_pointer_by_key(hash_group_pointer, partial_key, verbose):
 
 def get_value_by_path_items(orig_h5, path_items):
     value_pointer = get_value_pointer_by_path_items(orig_h5, path_items)
-#   if verbose:
-#       print "    In get_value_by_path_items: value_pointer.name=", value_pointer.name
+    if verbose:
+        print "    In get_value_by_path_items: value_pointer.name=", value_pointer.name
     if hasattr(value_pointer , '__dict__') and len(value_pointer.keys()) > 1:
         if verbose:
             print "    Case 1"
@@ -284,7 +287,7 @@ def get_value_by_path_items(orig_h5, path_items):
             data.append(data1)
     else:
         if verbose:
-            print "    Case 2, len(path_items)=", len(path_items), " path_items[len(path_items)-1]=", path_items[len(path_items)-1]
+            print "    Case 2"
         data = np.array(value_pointer[path_items[len(path_items)-1]]).tolist()
     return data
 
