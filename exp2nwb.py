@@ -1,10 +1,12 @@
 #!/usr/local/python-2.7.11/bin/python
 #
-# make_nwb.py
+# Copyright (c) 2017, HHMI-Janelia Research Campus All rights reserved. 
 #
-# Created by Claudia Friedsam on 2015-02-08.
-# Redesigned by Gennady Denisov on 2016-03-28.
-
+# exp2nwb.py 
+#
+# Conversion of experimental neurophysiology data from their
+# original formats to the NWB format
+#
 import sys
 import os
 
@@ -21,7 +23,7 @@ import re
 import optparse
 import shutil
 
-import libh5 
+import util  
 import libexp2dict
 import libdict2nwb
 
@@ -31,130 +33,55 @@ def make_nwb_command_line_parser(parser):
     parser.add_option("-d", "--project_dir", dest="project_dir", help="project directory name", default="")
     parser.add_option("-D", "--debug",   action="store_true",  dest="debug", help="output debugging info; don't delete project dir", default=False)
     parser.add_option("-e", "--no_error_handling", action="store_false", dest="handle_errors", help="handle_errors", default=True)
-    parser.add_option("-s", "--pathstr", dest="path_str", help="dot-separated path string",metavar="path_str",default="")
     parser.add_option("-r", "--replace", action="store_true", dest="replace", help="if output file exists, replace it", default=False)
+    parser.add_option("-s", "--pathstr", dest="path_str", help="dot-separated path string",metavar="path_str",default="")
+    parser.add_option("-t", "--type",    dest="data_type", help="specify explicitly: 'ephys' or 'ophys'; otherwise will be determined automatically", default="")
     parser.add_option("-v", "--verbose", action="store_true", dest="verbose", help="increase the verbosity level", default=False)
 
     return parser
 
 # ------------------------------------------------------------------------------
 
-def set_data_origin(data_h5, meta_h5, options):
-    options.data_origin = "Unknown"
-    keys = [str(i) for i in libh5.get_key_list(data_h5["trialPropertiesHash"])]
-    keys2 = libh5.get_key_list(data_h5["timeSeriesArrayHash"])
-    if 'GoodTrials' in keys and not 'LickTime' in keys and not 'EphusVars' in keys2:
-        options.data_origin = "DG"
-    elif not "LickTime"   in libh5.get_key_list(data_h5["trialPropertiesHash"]) and \
-       not "EphusVars"  in libh5.get_key_list(data_h5["timeSeriesArrayHash"]):
-        options.data_origin = "SP"
-    elif "EphusVars" in keys2:
-        # NL data
-        options.data_origin = "NL"
-    elif "intracellular" in meta_h5.keys():
-        # JY data
-        options.data_origin = "JY"
-    else:
-        sys.exit("Data origin not determined")
+def set_data_type(data_h5, meta_h5, options):
+    if len(options.data_type) == 0:                 
+        # Determine the data type automatically
+        keys = [str(i) for i in util.get_key_list(data_h5["trialPropertiesHash"])]
+        keys2 = util.get_key_list(data_h5["timeSeriesArrayHash"])
+        if not "LickTime"   in util.get_key_list(data_h5["trialPropertiesHash"]) and \
+           not "EphusVars"  in util.get_key_list(data_h5["timeSeriesArrayHash"]):
+            options.data_type = "ophys"
+        elif "EphusVars" in keys2:
+            options.data_type = "ephys"
+    if options.data_type not in ["ephys", "ophys"]:
+        sys.exit("Could not determine the data type")
 
     if options.verbose:
-        print("\nData origin: " + options.data_origin + "\n")
+        print("\nData type: " + options.data_type + "\n")
     return options
 
 # ------------------------------------------------------------------------------
 
 def produce_partial_nwb(data_path, metadata_path, options):
-    data_h5 = h5py.File(data_path, "r")
-    if len(metadata_path) > 0:
-        meta_h5 = h5py.File(metadata_path, "r")
+    if data_path.split(".")[-1] == "h5":
+        data = h5py.File(data_path, "r")
+        if len(metadata_path) > 0 and metadata_path.split(".")[-1] == "h5":
+            metadata = h5py.File(metadata_path, "r")
+        elif len(metadata_path) == 0:
+            metadata = data
+        else:
+            sys.exit("\nInput metadata from files of this type is not supported")
     else:
-        meta_h5 = data_h5
-
-    options = set_data_origin(data_h5, meta_h5, options)
+        sys.exit("\nInput data from files of this type is not supported")
+    options = set_data_type(data, metadata, options)
 
     # Extract (meta)data
-    if options.path_str == "top_datasets":
-        dict = libexp2dict.top_datasets(data_h5, meta_h5, options)
-
-    elif options.path_str.split(".")[0] == "acquisition":
-        items_acquisition = ["acquisition.images", "acquisition.timeseries"]
-        if not re.search("acquisition.timeseries", options.path_str) and\
-           not re.search("acquisition.images", options.path_str):
-            sys.exit("\nUnsupported path string: " + options.path_str)
-        elif re.search("acquisition.timeseries", options.path_str):
-            dict = libexp2dict.acquisition_timeseries(data_h5, options)
-        elif re.search("acquisition.images", options.path_str):
-            dict = libexp2dict.acquisition_images(data_h5, options)
-
-    elif options.path_str == "analysis":
-        dict = libexp2dict.collect_analysis_information(data_h5, options)
-
-    elif options.path_str.split(".")[0] == "epochs":
-        dict = libexp2dict.create_epochs(data_h5, options)
-
-    elif options.path_str.split(".")[0] == "general":
-
-        items_general = ["general.top_datasets", "general.devices", \
-                         "general.subject", "general.extracellular_ephys", \
-                         "general.optogenetics", "general.optophysiology"]
-               
-        if not options.path_str in items_general:
-            sys.exit("\nUnsupported path string: " + options.path_str)
-
-        # Extract metadata
-        if options.path_str == "general.devices":
-            dict = libexp2dict.general_devices_data()
-        elif options.path_str == "general.extracellular_ephys":
-            dict = libexp2dict.general_extracellular_ephys_data(meta_h5, options)
-        elif options.path_str == "general.optophysiology":
-            dict = libexp2dict.general_optophysiology_data(data_h5, options)
-        else:
-            dict = libexp2dict.general(meta_h5, options)
-
-    elif options.path_str.split(".")[0] == "processing":
-        if options.path_str.split(".")[1] == "extracellular_units":
-            dict = libexp2dict.processing_extracellular_units_data(data_h5, meta_h5, options)
-        elif options.path_str.split(".")[1] == "ROIs":
-            dict = libexp2dict.processing_ROIs(data_h5, options)
-        elif options.path_str.split(".")[2] == "BehavioralEvents":
-            # e.g. processing.Auditory.BehavioralEvents.reward_cue
-            #      processing.Licks.BehavioralEvents.lick_left, processing.Licks.BehavioralEvents.lick_right
-            #      processing.Pole.BehavioralEvents.pole_accessible
-            #      processing.Reward.BehavioralEvents.water_left_reward, processing.Reward.BehavioralEvents.water_right_raward
-            #      processing.Whisker.BehavioralEvents.pole_touch_protract, processing.Whisker.BehavioralEvents.pole_touch_retract
-            module_name = options.path_str.split(".")[1]
-            series_name = options.path_str.split(".")[-1]
-            dict = libexp2dict.processing_events(module_name, series_name, data_h5, options)
-        elif options.path_str.split(".")[2] == "BehavioralTimeSeries":
-            # e.g. processing.Whisker.BehavioralTimeseries.whisker_angle, processing.Whisker.BehavioralTimeseries.whisker_curve
-            module_name = options.path_str.split(".")[1]
-            series_name = options.path_str.split(".")[-1]
-            dict = libexp2dict.processing_timeseries(module_name, series_name, data_h5, options)
-        else:
-            sys.exit("\nUnsupported path string " + options.path_str + ". Exit")
-
-    elif options.path_str.split(".")[0] == "stimulus":
-        if not len(options.path_str.split(".")) == 3 or not options.path_str.split(".")[1] == "presentation":
-            # e.g. stimulus.presentation.auditory_cue
-            #      stimulus.presentation.pole_accessible
-            #      stimulus.presentation.water_left
-            #      stimulus.presentation.water_right
-            #      stimulus.presentation.zaber_motor_pos
-            #      stimulus.presentation.pole_in
-            #      stimulus.presentation.pole_out
-            #      stimulus.presentation.photostimulus
-            sys.exit("\nUnsupported path string " + options.path_str + ". Exit")
-        else:
-            series_name = options.path_str.split(".")[-1]
-            dict = libexp2dict.stimulus_presentation_timeseries(series_name, data_h5, meta_h5, options)
-    else:
-        sys.exit("\nUnsupported path string " + options.path_str)
+    dict = libexp2dict.make_dict(data, metadata, options)
 
     # Populate (meta)data
     if len(dict.keys()) == 0:
         sys.exit("Computing the dictionary is not currently implemented")
 
-    libdict2nwb.make_h5(options.path_str, dict, options.project_dir)
+    libdict2nwb.make_partial_nwb(options.path_str, dict, options.project_dir)
 
 # ------------------------------------------------------------------------------
 
@@ -195,7 +122,10 @@ def update_nwb_object(last_item, curr_nwb_group, curr_h5_path, h5_object, nwb_ob
                     else:
                         curr_nwb_group.set_dataset(str(k), np.array(h5_object[curr_h5_path1]), abort=False)
                 except:
-                    curr_nwb_group.set_custom_dataset(str(k), np.array(h5_object[curr_h5_path1]))
+                    try:
+                        curr_nwb_group.set_custom_dataset(str(k), np.array(h5_object[curr_h5_path1]))
+                    except:
+                        pass
             else:
 #               print "    Item is a group"
                 # Next-level item is a group
@@ -217,27 +147,30 @@ def update_nwb_object(last_item, curr_nwb_group, curr_h5_path, h5_object, nwb_ob
                            try:
                                curr_nwb_group1 = curr_nwb_group.make_group(ancestry, str(k), abort=False)
                            except:
-                               update_object = 0
                                try:
-                                   nwb_object.create_group(curr_h5_path)
+                                   curr_nwb_group1 = nwb_object.create_group(curr_h5_path)
+#                                  h5_object.copy(curr_h5_path1, nwb_object.file_pointer[curr_h5_path])
                                except:
                                    # Group already exists
+                                   try:
+                                       curr_nwb_group1 = nwb_object.file_pointer[curr_h5_path1]
+                                   except:
+                                       curr_nwb_group1 = nwb_object.file_pointer[curr_h5_path]
+                               try:
+                                   h5_object.copy(curr_h5_path1, nwb_object.file_pointer[curr_h5_path])
+                               except:
                                    pass
-                               h5_object.copy(curr_h5_path1, nwb_object.file_pointer[curr_h5_path])
                 else:  
                    try: 
                        curr_nwb_group1 = curr_nwb_group.make_group(str(k), \
                                          attrs=extract_attrs(h5_object[curr_h5_path].attrs), abort=False)
                    except:
-                       update_object = 0
                        try:
-                           nwb_object.create_group(curr_h5_path)
+                           curr_nwb_group1 = nwb_object.create_group(curr_h5_path1)
+                           h5_object.copy(curr_h5_path1, curr_nwb_group1)
                        except:
-                           # Group already exists
-                           pass
-                       h5_object.copy(curr_h5_path1, nwb_object.file_pointer[curr_h5_path])
-                if update_object:
-                    nwb_object = update_nwb_object(last_item, curr_nwb_group1, curr_h5_path1, h5_object, nwb_object)
+                           curr_nwb_group1 = nwb_object.file_pointer[curr_h5_path1]
+                nwb_object = update_nwb_object(last_item, curr_nwb_group1, curr_h5_path1, h5_object, nwb_object)
     else:
         # Current path in h5_data points to a dataset
         path_items = curr_h5_path.split("/")
@@ -337,62 +270,62 @@ def create_and_assemble_all_partial_files(data_path, metadata_path, options):
         meta_h5 = h5py.File(metadata_path, "r")
     else:
         meta_h5 = data_h5
-    options = set_data_origin(data_h5, meta_h5, options)
+    options = set_data_type(data_h5, meta_h5, options)
 
-    task_strings = ["top_datasets", \
-                    "analysis",\
-                    "analysis", \
-                    "epochs", \
-                    "general.devices", \
-                    "general.subject", \
-                    "general.top_datasets"]
-    if options.data_origin == "NL":
-        task_strings = task_strings + \
-                   ["acquisition.timeseries.extracellular_traces",\
-                    "acquisition.timeseries.lick_trace",\
-                    "general.extracellular_ephys", \
-                    "general.optogenetics",\
-                    "processing.extracellular_units.top_datasets",\
-                    "processing.extracellular_units.EventWaveform",\
-                    "processing.extracellular_units.UnitTimes",\
-                    "stimulus.presentation.auditory_cue",\
-                    "stimulus.presentation.photostimulus",
-                    "stimulus.presentation.pole_in",\
-                    "stimulus.presentation.pole_out"]
-    elif  options.data_origin == "SP":
-        task_strings = task_strings + \
-                   ["acquisition.images",\
-                    "acquisition.timeseries",\
-                    "general.optophysiology",\
-                    "processing.Auditory.BehavioralEvents.reward_cue",\
-                    "processing.Licks.BehavioralEvents.lick_left",\
-                    "processing.Licks.BehavioralEvents.lick_right",\
-                    "processing.Pole.BehavioralEvents.pole_accessible",\
-                    "processing.Reward.BehavioralEvents.water_left_reward", \
-                    "processing.Reward.BehavioralEvents.water_right_reward",\
-                    "processing.ROIs",\
-                    "processing.Whisker.BehavioralEvents.pole_touch_protract", \
-                    "processing.Whisker.BehavioralEvents.pole_touch_retract", \
-                    "processing.Whisker.BehavioralTimeSeries.whisker_angle", \
-                    "processing.Whisker.BehavioralTimeSeries.whisker_curvature", \
-                    "stimulus.presentation.auditory_cue",\
-                    "stimulus.presentation.pole_accessible", \
-                    "stimulus.presentation.water_left", \
-                    "stimulus.presentation.water_right",\
-                    "stimulus.presentation.zaber_motor_pos"]
+    common_pstrings = ["top_datasets", \
+                       "analysis",\
+                       "epochs", \
+                       "general.devices", \
+                       "general.subject", \
+                       "general.top_datasets"]
+    ephys_pstrings =  ["acquisition.timeseries.extracellular_traces",\
+                       "acquisition.timeseries.lick_trace",\
+                       "general.extracellular_ephys", \
+                       "general.optogenetics",\
+                       "processing.extracellular_units.top_datasets",\
+                       "processing.extracellular_units.EventWaveform",\
+                       "processing.extracellular_units.UnitTimes",\
+                       "stimulus.presentation.auditory_cue",\
+                       "stimulus.presentation.photostimulus",
+                       "stimulus.presentation.pole_in",\
+                       "stimulus.presentation.pole_out"]
+    ophys_pstrings =  ["acquisition.images",\
+                       "acquisition.timeseries",\
+                       "general.optophysiology",\
+                       "processing.Auditory.BehavioralEvents.reward_cue",\
+                       "processing.Licks.BehavioralEvents.lick_left",\
+                       "processing.Licks.BehavioralEvents.lick_right",\
+                       "processing.Pole.BehavioralEvents.pole_accessible",\
+                       "processing.Reward.BehavioralEvents.water_left_reward", \
+                       "processing.Reward.BehavioralEvents.water_right_reward",\
+                       "processing.ROIs",\
+                       "processing.Whisker.BehavioralEvents.pole_touch_protract", \
+                       "processing.Whisker.BehavioralEvents.pole_touch_retract", \
+                       "processing.Whisker.BehavioralTimeSeries.whisker_angle", \
+                       "processing.Whisker.BehavioralTimeSeries.whisker_curvature", \
+                       "stimulus.presentation.auditory_cue",\
+                       "stimulus.presentation.pole_accessible", \
+                       "stimulus.presentation.water_left", \
+                       "stimulus.presentation.water_right",\
+                       "stimulus.presentation.zaber_motor_pos"]
+    pstrings = common_pstrings
+    if options.data_type == "ephys":
+        pstrings = pstrings + ephys_pstrings
+    else:
+        pstrings = pstrings + ophys_pstrings
 
     # Create partial NWB files
-    task_strings = sorted(task_strings)
-    for s in range(len(task_strings)):
-#       print "\nstring= ", task_strings[s]
+    pstrings = sorted(pstrings)
+    for s in range(len(pstrings)):
         command = "/home/denisovg/work/Karel_Svoboda/exp2nwb.py " + data_path + " " + metadata_path + " " 
-        command += " -s " + task_strings[s] + " -d " + options.project_dir
+        command += " -s " + pstrings[s] + " -d " + options.project_dir
         if options.verbose:
             print "Running command: " + command
         os.system(command)
                     
     # Assemble all
-    print "\nStaring assembly of the partial files...\n"
+    if options.debug:
+        sys.stderr.write("\nStarting assembly...\n")
     os.system("python exp2nwb.py " + options.project_dir)
     if not options.debug:
         shutil.rmtree(options.project_dir)
