@@ -18,7 +18,7 @@ from sets import Set
 import util
 
 verbose = 1    
-debug   = 1
+debug   = 0
 
 class Dict2NWB(object):
 
@@ -597,5 +597,7 @@ def make_partial_nwb(string, dict, project_dir):
     except:
         sys.exit("\nMethod libdict2nwb." + method_name + " has not been implemented")
 
+    if not os.path.exists(project_dir):
+        os.makedirs(project_dir)
     method(string, dict, project_dir)
 
