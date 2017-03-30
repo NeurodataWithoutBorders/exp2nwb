@@ -98,10 +98,15 @@ with domain scientists, depending on their data.
 As a sample, we provide implementation of exp2dict for two datasets, both generated at Svoboda lab
 in Janelia and uploaded to the crcns.org website:
 - ephys dataset (Li et al, Nature 2015, doi: 10.1038/nature14178), 
+
       https://portal.nersc.gov/project/crcns/download/alm-1     
+
       https://portal.nersc.gov/project/crcns/download/alm-2
-  and
+
+ and
+
 - ophys datsets (Peron et al, Neuron 2015, doi: 10.1016/j.neuron.2015.03.027) 
+
       https://portal.nersc.gov/project/crcns/download/ssc-1
       
 A list of dictionary keys that are exoected to be defined when re-implementing the functions in library exp2dict is provided in doc/README_exp2dict_keys.
@@ -121,10 +126,9 @@ extract data from input file(s).
 For the two datasets mentioned above, the full sets of supported p-strings is listed in doc/README_p-strings.
 
 The current implementation of both exp2nwb.py and libexp2dict.py assumes the 
-imput data files are in the HDF5 format. Those users who's data are actually
-stored in MAT format, can use our sctipt 
+imput data files are in the HDF5 format. The experimental data at are actually
+stored in MAT format, can be converted to HDF5 format using our script
     https://github.com/NeurodataWithoutBorders/mat2nwb/blob/master/mat2h5.py
-in order to convet the MAT files into HDF5 files.
 
 To see the usage of the script exp2nwb.py, type the name of the script:
 
