@@ -1,0 +1,12 @@
+A sample IPython session to create the file acquisition.timeseries.extracellular_traces.h5
+and store it in the project folder "My_project":
+
+$ ipython
+
+In [1]: %run set_imports.py
+
+In [2]: %run make_acquisition.timeseries.extracellular_traces.py            
+
+Creating partial NWB file:  My_project/acquisition.timeseries.extracellular_traces.h5
+
+
