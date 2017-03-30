@@ -1,0 +1,116 @@
+Each the elementary convertion task described in the top-level README file 
+is characterized by a dot-separated processing string, or p-string.
+The p-string matches the name of the partial NWB file produced by the task, 
+and the dot-separated substrings of the p-string match the substrings 
+in the slash-separated path to the data that will be stored in this file. 
+
+As described in section "Code usage" of the top-level README file, 
+the p-strings are actually used as inputs by our conversion procedure.
+
+The p-strings that are common to both the ephys and ophys data are:
+
+common_p-strings =
+
+    ["top_datasets", 
+     "acquisition.timeseries.<behavioral_data_name>", 
+     "analysis", 
+     "epochs", 
+     "general.devices", 
+     "general.subject", 
+     "general.top_datasets", 
+     "processing.<Module_name>.BehavioralEvents.<behavioral_data_name>", 
+     "processing.<Module_name>.BehavioralTimeseries.<behavioral_data_name>", 
+     "stimulus.presentation.<stimulus_name>"],
+
+where
+  - "top_datasets" represents a set of required datasets to be stored at 
+    a given level in the NWB file, while all other strings correspond to groups;
+  - the user-specified may be "Auditory", "Licks", "Pole", etc., depending 
+    on the data;  
+  - the user-specified <behavioral_data_name> may be "reward_cue", 
+    "lick_left", "lick_right", "pole_accessible", etc., depending on the data;
+  - the user-specified <stimulus_name> may be "photostimulus", "pole_in", 
+    "pole_out", etc., depending on the data.
+
+The ephys data-specific p-strings are:
+
+ephys_pstrings =
+    ["acquisition.timeseries.<ephys_type>cellular_traces", 
+     "acquisition.timeseries.<behavioral_data_name>_trace", 
+     "general.<ephys_type>cellular_ephys", 
+     "general.optogenetics", 
+     "processing.<ephys_type>cellular_units.top_datasets", 
+     "processing.<ephys_type>cellular_units.<ephys_data_name>"]
+
+where
+
+the user-specified <ephys_type> may be "extra", "intra", etc., and
+the user-specified <ephys_data_name> may be one of ["EventWaveform", "UnitTimes"].
+
+The ophys data-specific p-strings are:
+
+ophys_pstrings =
+
+    ["acquisition.images", 
+     "acquisition.timeseries", 
+     "general.optophysiology", 
+     "processing.ROIs"],
+
+where
+  - the partial NWB files acquisition.images.h5 and acquisition.timeseries.h5 
+    are supposed to store only the image-related, and not the behavioral data; 
+    the latter are supposed to be handled by other p-strings, as described above.
+
+For the ephys and ophys datasets mentioned in the top-level README file, the full sets of supported p-strings are:
+
+for ephys datsets,
+
+ephys_pstrings =
+
+    ["top_datasets", 
+     "acquisition.timeseries.extracellular_traces", 
+     "acquisition.timeseries.lick_trace", 
+     "analysis", 
+     "epochs", 
+     "general.devices", 
+     "general.subject", 
+     "general.top_datasets", 
+     "general.extracellular_ephys", 
+     "general.optogenetics", 
+     "processing.extracellular_units.top_datasets", 
+     "processing.extracellular_units.EventWaveform", 
+     "processing.extracellular_units.UnitTimes", 
+     "stimulus.presentation.auditory_cue", 
+     "stimulus.presentation.photostimulus", 
+     "stimulus.presentation.pole_in", 
+     "stimulus.presentation.pole_out"]
+
+for ophys dataset,
+
+ophys_pstrings =
+
+    ["top_datasets", 
+     "analysis", 
+     "epochs", 
+     "general.devices", 
+     "general.subject", 
+     "general.top_datasets", 
+     "acquisition.images", 
+     "acquisition.timeseries", 
+     "general.optophysiology", 
+     "processing.Auditory.BehavioralEvents.reward_cue", 
+     "processing.Licks.BehavioralEvents.lick_left", 
+     "processing.Licks.BehavioralEvents.lick_right", 
+     "processing.Pole.BehavioralEvents.pole_accessible", 
+     "processing.Reward.BehavioralEvents.water_left_reward", 
+     "processing.Reward.BehavioralEvents.water_right_reward", 
+     "processing.ROIs", 
+     "processing.Whisker.BehavioralEvents.pole_touch_protract", 
+     "processing.Whisker.BehavioralEvents.pole_touch_retract", 
+     "processing.Whisker.BehavioralTimeSeries.whisker_angle", 
+     "processing.Whisker.BehavioralTimeSeries.whisker_curvature", 
+     "stimulus.presentation.auditory_cue", 
+     "stimulus.presentation.pole_accessible", 
+     "stimulus.presentation.water_left", 
+     "stimulus.presentation.water_right", 
+     "stimulus.presentation.zaber_motor_pos"]

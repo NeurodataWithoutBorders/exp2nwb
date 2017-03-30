@@ -1,0 +1,177 @@
+While the library libdict2nwb.py may employ generic functions 
+to produce partial NWB files storing time series data with a given name, 
+the names of the functions in the library exp2dict.py always exactly 
+match the names of the processing strings, but with the "dots" replaced by the 
+"underscore" sysmbols. Listed below are the dictionary keys that are required 
+to be created by each the function in the library exp2dict.py.
+
+top_datasets keys:                                  # any data
+------------------
+file_name
+start_time
+identifier
+description
+mode 
+
+acquisition_images keys:                            # ophys data only
+------------------------
+acquisition.images.description
+acquisition.images.fov_###_green
+acquisition.images.fov_###_green.attrs
+acquisition.images.fov_###_red
+acquisition.images.fov_###_red.attrs
+acquisition.images.<dataset>                  
+acquisition.images.<dataset>.attrs           
+
+acquisition_timeseries keys:                        # ophys data only
+----------------------------
+acquisition.timeseries.description
+acquisition.timeseries.fov_###.dimension
+acquisition.timeseries.fov_###.external_file
+acquisition.timeseries.fov_###.external_file.attrs 
+acquisition.timeseries.fov_###.field_of_view
+acquisition.timeseries.fov_###.format
+acquisition.timeseries.fov_###.imaging_plane
+acquisition.timeseries.fov_###.scan_line_rate
+acquisition.timeseries.fov_###.timestamps
+
+acquisition_timeseries_extracellular_traces keys:   # ephys data only
+-------------------------------------------------
+acquisition.timeseries.extracellular_traces
+
+acquisition_timeseries_<series_name> keys:          # any data
+------------------------------------------
+acquisition.timeseries.<series_name>.attrs        
+acquisition.timeseries.<series_name>.data.attrs   
+acquisition.timeseries.<series_name>.num_samples
+acquisition.timeseries.<series_name>.timestamps
+
+analysis keys:                                      # any data
+--------------
+analysis.description
+analysis.good_trials
+analysis.trial_start_times
+analysis.trial_type_mat
+analysis.trial_type_string
+
+epochs keys:                                        # any data
+------------
+epochs.trial_###.description
+epochs.trial_###.start_time
+epochs.trial_###.stop_time
+epochs.trial_###.tags
+epochs.trial_###.units_present
+
+general_divices keys:                               # any data
+---------------------
+general.divices.ephys_acquisition
+general.divices.photostim_source
+
+general_extracellular keys:                         # ephys data only
+---------------------------
+general.extracellular.ADunit
+general.extracellular.data_types
+general.extracellular.ground_coordinates
+general.extracellular.impedance
+general.extracellular.penetration_num
+general.extracellular.recording_marker
+general.extracellular.recording_type
+
+general_subject keys:                              # any data
+---------------------
+general.subject.description
+general.subject.genotype
+general.subject.subject_id
+
+general_optogenetics keys:                         # ephys data only
+--------------------------
+general.optogenetics.site_1.device
+general.optogenetics.site_1.excitation_lambda
+general.optogenetics.site_1.location
+general.optogenetics.site_1.stimulation_method
+
+general_optophysiology keys:                       # ophys data only
+----------------------------
+general.optophysiology.description
+general.optophysiology.fov_###.channel_green.description
+general.optophysiology.fov_###.channel_green.emission_lambda
+general.optophysiology.fov_###.channel_red.description
+general.optophysiology.fov_###.channel_red.emission_lambda
+general.optophysiology.fov_###.description
+general.optophysiology.fov_###.device
+general.optophysiology.fov_###.excitation_lambda
+general.optophysiology.fov_###.imaging_rate
+general.optophysiology.fov_###.indicator
+general.optophysiology.fov_###.location
+general.optophysiology.fov_###.manifold
+general.optophysiology.fov_###.manifold.attrs
+general.optophysiology.fov_###.reference_frame
+
+processing_extracellular_units_top_datasets keys: # ephys data only
+------------------------------------------------
+processing.extracellular_units.description
+processing.extracellular_units.identification_method
+processing.extracellular_units.spike_sorting
+
+processing_extracellular_units_EventWaveform keys: # ephys data only
+-------------------------------------------------
+processing.extracellular_units.EventWaveform.attrs                        
+processing.extracellular_units.EventWaveform.unit_##.data
+processing.extracellular_units.EventWaveform.unit_##.data.attrs
+processing.extracellular_units.EventWaveform.unit_##.electrode_idx
+processing.extracellular_units.EventWaveform.unit_##.num_samples
+processing.extracellular_units.EventWaveform.unit_##.sample_length
+processing.extracellular_units.EventWaveform.unit_##.source
+processing.extracellular_units.EventWaveform.unit_##.timestamps
+
+processing_extracellular_units_UnitTimes keys:     # ephys data only
+---------------------------------------------
+processing.extracellular_units.UnitTimes.attrs                             
+processing.extracellular_units.UnitTimes.cell_types
+processing.extracellular_units.UnitTimes.unit_##.source
+processing.extracellular_units.UnitTimes.unit_##.times
+processing.extracellular_units.UnitTimes.unit_##.trial_ids
+processing.extracellular_units.UnitTimes.unit_##.unit_description
+
+processing_<Module_name>BehavioralEvents<behavioral_data_name> keys:     # any data
+-------------------------------------------------------------------
+processing.<Module_name>.BehavioralEvents.<behavioral_data_name>.attrs      
+processing.<Module_name>.BehavioralEvents.<behavioral_data_name>.data
+processing.<Module_name>.BehavioralEvents.<behavioral_data_name>.data.attrs
+processing.<Module_name>.BehavioralEvents.<behavioral_data_name>.num_samples
+processing.<Module_name>.BehavioralEvents.<behavioral_data_name>.timestamps
+
+processing_<Module_name>BehavioralTimeSeries<behavioral_data_name> keys: # any data
+-----------------------------------------------------------------------
+processing.<Module_name>.BehavioralTimeseries.<behavioral_data_name>.attrs  
+processing.<Module_name>.BehavioralTimeseries.<behavioral_data_name>.data
+processing.<Module_name>.BehavioralTimeseries.<behavioral_data_name>.data.attrs
+processing.<Module_name>.BehavioralTimeseries.<behavioral_data_name>.num_samples
+processing.<Module_name>.BehavioralTimeseries.<behavioral_data_name>.timestamps
+
+processing_ROIs keys:                                                    # ophys data only
+---------------------
+processing.ROIs.DfOverF.attrs                                              
+processing.ROIs.DfOverF.fov_###.data
+processing.ROIs.DfOverF.fov_###.data.attrs                                 
+processing.ROIs.DfOverF.fov_###.roi_names
+processing.ROIs.DfOverF.fov_###.timestamps
+processing.ROIs.DfOverF.fov_###.trial_ids
+processing.ROIs.ImageSegmentation.attrs                                   
+processing.ROIs.ImageSegmentation.fov_###.<roi_id_##>.master1_shape
+processing.ROIs.ImageSegmentation.fov_###.<roi_id_##>.pixmap
+processing.ROIs.ImageSegmentation.fov_###.<roi_id_##>.weight
+processing.ROIs.ImageSegmentation.fov_###.description
+processing.ROIs.ImageSegmentation.fov_###.imaging_plane_name
+processing.ROIs.ImageSegmentation.fov_###.ref_image_green
+processing.ROIs.ImageSegmentation.fov_###.ref_image_red
+processing.ROIs.ImageSegmentation.fov_###.roi_ids
+processing.ROIs.description
+
+stimulus_presentation_<stimulus_data_name> keys:                        # any data
+-----------------------------------------------
+stimulus.presentation.<stimulus_data_name>.attrs                         
+stimulus.presentation.<stimulus_data_name>.data
+stimulus.presentation.<stimulus_data_name>.data.attrs                   
+stimulus.presentation.<stimulus_data_name>.num_samples
+stimulus.presentation.<stimulus_data_name>.timestamps
