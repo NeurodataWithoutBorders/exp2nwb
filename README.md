@@ -95,7 +95,7 @@ i.e. not to change from one dataset to another, whreas the functions
 in the library exp2dict should be re-implemented in conjunction
 with domain scientists, depending on their data. 
 
-As a sample, we provide implementation of exp2dict for two datasets, both generated at Svoboda lab
+As a sample, we provide implementation of exp2dict.py for two datasets, both generated at Svoboda lab
 in Janelia and uploaded to the crcns.org website:
 - ephys dataset (Li et al, Nature 2015, doi: 10.1038/nature14178), 
 
