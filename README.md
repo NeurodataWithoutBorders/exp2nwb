@@ -33,7 +33,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Contributor: Gennady Denisov
 
-Acknowledgements: Karel Svoboda and Diego Gutnisky 
+Acknowledgements: Karel Svoboda, Diego Gutnisky and Jeff Teeters 
 
 
 Introduction
