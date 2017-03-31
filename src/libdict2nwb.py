@@ -23,7 +23,9 @@ debug   = 0
 class Dict2NWB(object):
 
     def initialize_h5_object(self, h5_file, dict):
-        vargs = {"start_time" : 0.0, "description" : "default", "file_name" : h5_file, "identifier" : h5_file[0:-4], "mode" : "w"}
+        vargs = {"start_time" : 0.0, "description" : "default", \
+                 "file_name" : h5_file, "identifier" : h5_file[0:-4], \
+                 "mode" : "w", "verbosity" : "none"}
         for k in ["start_time", "description", "identifier"]:
             if k in dict.keys():
                 vargs[k] = dict[k]
@@ -41,7 +43,7 @@ class Dict2NWB(object):
         h5_object = nwb_file.open(**dict)
         if verbose:
             print "Creating partial NWB file: ", os.path.join(project_dir, string+ ".h5")
-        h5_object.close2()
+        h5_object.close() 
 
 # ------------------------------------------------------------------------------
 
@@ -62,7 +64,7 @@ class Dict2NWB(object):
                            dtype='uint8', attrs=attrs)
         if verbose:
             print "Creating partial NWB file: ", os.path.join(project_dir, string+ ".h5")
-        h5_object.close2()
+        h5_object.close() 
 
 # ------------------------------------------------------------------------------
 
@@ -110,7 +112,7 @@ class Dict2NWB(object):
             sys.exit("Unsupported path string " + string)
         if verbose:
             print "Creating partial NWB file: ", os.path.join(project_dir, string+ ".h5")
-        h5_object.close2()
+        h5_object.close() 
 
 # ------------------------------------------------------------------------------
 
@@ -130,7 +132,7 @@ class Dict2NWB(object):
                 et.set_custom_dataset(name, dict[k])
         if verbose:
             print "Creating partial NWB file: ", os.path.join(project_dir, string+ ".h5")
-        h5_object.close2()
+        h5_object.close() 
 
 # ------------------------------------------------------------------------------
 
@@ -151,7 +153,7 @@ class Dict2NWB(object):
                     ag.set_custom_dataset(k1, dict[k])
         if verbose:
             print "Creating partial NWB file: ", os.path.join(project_dir, string+ ".h5")
-        h5_object.close2()
+        h5_object.close() 
 
 # ------------------------------------------------------------------------------
 
@@ -186,7 +188,7 @@ class Dict2NWB(object):
                         epoch.set_custom_dataset(k1, dict[k2])
         if verbose:
             print "Creating partial NWB file: ", os.path.join(project_dir, string+ ".h5")
-        h5_object.close2()
+        h5_object.close() 
 
 # ------------------------------------------------------------------------------
 
@@ -210,7 +212,7 @@ class Dict2NWB(object):
                     gg.set_custom_dataset(k1, dict[k])
         if verbose:
             print "Creating partial NWB file: ", os.path.join(project_dir, string+ ".h5")
-        h5_object.close2()
+        h5_object.close() 
 
 # ------------------------------------------------------------------------------
 
@@ -225,7 +227,7 @@ class Dict2NWB(object):
                                   attrs={"ancestry" : np.array(["device_X"])})
         if verbose:
             print "Creating partial NWB file: ", os.path.join(project_dir, string+ ".h5")
-        h5_object.close2()
+        h5_object.close() 
 
 # ------------------------------------------------------------------------------
 
@@ -258,7 +260,7 @@ class Dict2NWB(object):
                     sg.set_dataset(k.split(".")[-1], dict[k])
         if verbose:
             print "Creating partial NWB file: ", os.path.join(project_dir, string+ ".h5")
-        h5_object.close2()
+        h5_object.close() 
 
 # ------------------------------------------------------------------------------
 
@@ -279,7 +281,7 @@ class Dict2NWB(object):
                     sg.set_custom_dataset(k.split(".")[-1], dict[k])
         if verbose:
             print "Creating partial NWB file: ", os.path.join(project_dir, string+ ".h5")
-        h5_object.close2()
+        h5_object.close() 
 
 # ------------------------------------------------------------------------------
 
@@ -301,7 +303,7 @@ class Dict2NWB(object):
                     osg.set_custom_dataset(k.split(".")[-1], dict[k])
         if verbose:
             print "Creating partial NWB file: ", os.path.join(project_dir, string+ ".h5")
-        h5_object.close2()
+        h5_object.close() 
 
 # ------------------------------------------------------------------------------
 
@@ -335,7 +337,7 @@ class Dict2NWB(object):
                 channel_group.set_dataset(name_data, dict[k])
         if verbose:
             print "Creating partial NWB file: ", os.path.join(project_dir, string+ ".h5")
-        h5_object.close2()
+        h5_object.close() 
 
 # ------------------------------------------------------------------------------
 
@@ -379,7 +381,7 @@ class Dict2NWB(object):
         spk_times_iface.set_custom_dataset("cell_types",   dict[string + ".cell_types"])
         if verbose:
             print "Creating partial NWB file: ", os.path.join(project_dir, string+ ".h5")
-        h5_object.close2()
+        h5_object.close() 
 
 # ------------------------------------------------------------------------------
 
@@ -410,7 +412,7 @@ class Dict2NWB(object):
 
         if verbose:
             print "Creating partial NWB file: ", os.path.join(project_dir, string+ ".h5")
-        h5_object.close2()
+        h5_object.close() 
 
 # ------------------------------------------------------------------------------
 
@@ -428,7 +430,7 @@ class Dict2NWB(object):
 
         if verbose:
             print "Creating partial NWB file: ", os.path.join(project_dir, string+ ".h5")
-        h5_object.close2()
+        h5_object.close() 
 
 # ------------------------------------------------------------------------------
 
@@ -456,7 +458,7 @@ class Dict2NWB(object):
 
         if verbose:
             print "Creating partial NWB file: ", os.path.join(project_dir, string+ ".h5")
-        h5_object.close2()
+        h5_object.close() 
 
 # ------------------------------------------------------------------------------
 
@@ -468,7 +470,7 @@ class Dict2NWB(object):
         h5_object = self.processing_ROIs_ImageSegmentation(h5_object, string + ".ImageSegmentation", dict, project_dir)
         if verbose:
             print "Creating partial NWB file: ", os.path.join(project_dir, string+ ".h5")
-        h5_object.close2()
+        h5_object.close() 
 
 # ------------------------------------------------------------------------------
 
@@ -569,7 +571,7 @@ class Dict2NWB(object):
                 tsg.set_dataset(key, dict[string + "." + key], attrs=dict[string + ".data.attrs"])
         if verbose:
             print "Creating partial NWB file: ", os.path.join(project_dir, string+ ".h5")
-        h5_object.close2()
+        h5_object.close() 
 
 # ------------------------------------------------------------------------------
 
