@@ -62,10 +62,10 @@ epochs.trial_###.stop_time
 epochs.trial_###.tags
 epochs.trial_###.units_present
 
-general_divices keys:                               # any data
+general_devices keys:                               # any data
 ---------------------
-general.divices.ephys_acquisition
-general.divices.photostim_source
+general.devices.ephys_acquisition
+general.devices.photostim_source
 
 general_extracellular keys:                         # ephys data only
 ---------------------------
