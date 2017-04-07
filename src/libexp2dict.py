@@ -172,8 +172,9 @@ class Exp2Dict(object):
     def acquisition_timeseries_extracellular_traces(self, data, metadata, options):
         dict = {}
         fname = "voltage_filename" + os.path.basename(options.data_path)[13:-3] + ".mat"
-        dict["acquisition.timeseries.extracellular_traces"] = fname
-
+        dict["acquisition.timeseries.extracellular_traces.ephys_raw_data"] = fname
+        dict["acquisition.timeseries.extracellular_traces.attrs"] = {"source" : " ",\
+             "description" : "File containing the raw voltage data for this session" }
         return dict
 
 # ------------------------------------------------------------------------------
@@ -270,6 +271,7 @@ class Exp2Dict(object):
         for k in dict_general.keys():
             if len(k.split(".")) == 4 and k.split(".")[1] == "optogenetics":
                 dict[k] = dict_general[k]
+        dict["general.optogenetics.source"] = " " 
         return dict
 
 # ------------------------------------------------------------------------------
@@ -388,6 +390,7 @@ class Exp2Dict(object):
                 for s in range(num_sites):
                     if options.data_type == "ephys":
                         dict["general.optogenetics.site_" + str(s+1) + ".device"] = "Ciel 250 mW 473nm Laser from Laser Quantum"
+                        dict["general.optogenetics.site_" + str(s+1) + ".description"] = " "
                     for key1 in key1_list:
                         if key1 == "stimulationMethod":
                             dict["general.optogenetics.site_" + str(s+1) + ".stimulation_method"]=str(value1[key1][s])
@@ -538,6 +541,7 @@ class Exp2Dict(object):
         for i in range(1, (num_shanks+1)):
             for j in range(shank_size):
                 shank.append("shank" + str(i))
+        dict["general.extracellular_ephys.impedance"] = "not recorded"
         dict["general.extracellular_ephys.electrode_map"] = probe
         dict["general.extracellular_ephys.electrode_group"] = shank
         dict["general.extracellular_ephys.filtering"]  = "Bandpass filtered 300-6K Hz"
@@ -701,7 +705,7 @@ class Exp2Dict(object):
                 except:
                     ids = tsah["value"]["%d"%(subarea+2)]["imagingPlane"]["ids"]
                 roi_ids = ids["ids"].value
-                dict[path + image_plane + ".roi_ids"] = np.array(roi_ids)
+                dict[path + image_plane + ".roi_list"] = np.array(roi_ids)
                 for i in range(len(roi_ids)):
                     rid = roi_ids[i]
                     if num_planes == 1:
@@ -739,7 +743,7 @@ class Exp2Dict(object):
         series_path = "processing.extracellular_units.EventWaveform"
         group_attrs = {"source" :  "Data as reported in Nuo's file"}
         dict[series_path + ".attrs"] = group_attrs
-    
+        
         for i in range(unit_num):
             i = i+1
             if options.verbose:
@@ -767,7 +771,6 @@ class Exp2Dict(object):
             dict[series_path + "." + unit + ".data.attrs"]    = data_attrs
             dict[series_path + "." + unit + ".timestamps"]    = timestamps
             dict[series_path + "." + unit + ".sample_length"] = len(timestamps)
-            dict[series_path + "." + unit + ".source"]        = "Data from processed matlab file"
             dict[series_path + "." + unit + ".electrode_idx"] = [channel[0]]
             dict[series_path + "." + unit + ".num_samples"]   = len(timestamps)
     
@@ -1246,8 +1249,8 @@ class Exp2Dict(object):
         dict[series_path + ".timestamps"]  = timestamps
         dict[series_path + ".data"]        = data
         dict[series_path + ".num_samples"] = len(timestamps)
-        dict[series_path + ".data_attrs"]  = data_attrs
-        dict[series_path + ".group_attrs"] = group_attrs
+        dict[series_path + ".data.attrs"]  = data_attrs
+        dict[series_path + ".attrs"]       = group_attrs
 
         return dict
 
@@ -1304,8 +1307,8 @@ class Exp2Dict(object):
         dict[series_path + ".timestamps"]  = timestamps
         dict[series_path + ".data"]        = data
         dict[series_path + ".num_samples"] = len(timestamps)
-        dict[series_path + ".data_attrs"]  = data_attrs
-        dict[series_path + ".group_attrs"] = group_attrs
+        dict[series_path + ".data.attrs"]  = data_attrs
+        dict[series_path + ".attrs"]       = group_attrs
     
         return dict
     
@@ -1368,8 +1371,8 @@ class Exp2Dict(object):
                     dict[series_path + ".data"]        = traces[s]
                     dict[series_path + ".num_samples"] = len(timestamps)
                     dict[series_path + ".site"] = str(coord + " in mm\natlas location: " + loc)
-                    dict[series_path + ".data_attrs"]   = data_attrs
-                    dict[series_path + ".group_attrs"]  = group_attrs
+                    dict[series_path + ".data.attrs"]  = data_attrs
+                    dict[series_path + ".attrs"]       = group_attrs
                 except:
                     print "No photostimulus info found in the metadata file"
         return dict
