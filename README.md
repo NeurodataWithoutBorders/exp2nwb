@@ -143,16 +143,18 @@ All the available command line options can be viewed by typing
 In particular, to produce a single partial NWB file <pstring>.h5 from the input 
 data, type
 
-    $ exp2nwb.py <data>.h5 [ <meta_data>.h5]  -s <pstring> -d <project_name>
+    $ exp2nwb.py <data>.h5 [ <meta_data>.h5]  -s <pstring> -d <project_folder>
     
-The partial NWB file will be stored in the project folder <project_name>, 
-which by default is named <data>.
+The partial NWB file will be stored in the project folder <project_folder>, 
+which, by default, has the same name as <data>.
 
-To assemble all the partial NWB files in folder <project_name>, type
+To assemble all the partial NWB files in folder <project_folder>, type
 
     $ exp2nwb.py <project_folder>.
     
-This command will produce a full NWB file named <project_name>.nwb.
+This command will produce a full NWB file named, by default,  <project_folder>.nwb,
+or the name spwcified by the option "-o <output_file>". 
+
 After the assembly, the project folder will be deleted by default, unless
 the debugging mode has been used, as specified by the option "-D".
 
