@@ -1,7 +1,9 @@
 This folder contains a "toy" example that illustrates usage of the code stored in the folder src.
 
-The example is stored as a Jupyter notebook and can be run using Jupyter application.
+The example is stored as a Jupyter notebook and can be run using the Jupyter application.
 
-It generates several partial NWB files and then assembles them to produce a full-size NWB file. After the assembly, a validation check is performed.
+It generates several partial NWB files in folder 'Project_folder' and then assembles them to produce a full-size NWB file named Example.nwb. 
+
+After the assembly, a validation check is performed.
 
 
