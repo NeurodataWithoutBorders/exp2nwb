@@ -38,6 +38,7 @@ class Dict2NWB(object):
 # ------------------------------------------------------------------------------
 
     def top_datasets(self, string, dict, project_dir):
+        dict["verbosity"] = "none"
         if debug:   
             util.print_dict_keys(dict)       
         h5_object = nwb_file.open(**dict)
@@ -48,20 +49,29 @@ class Dict2NWB(object):
 # ------------------------------------------------------------------------------
 
     def acquisition_images(self, string, dict, project_dir):
+        # string = acquisition.images
         if debug:
             util.print_dict_keys(dict)       
         h5_object = self.initialize_h5_object(os.path.join(project_dir, string+ ".h5"), dict)
-        acquisition_group     = h5_object.make_group("acquisition", abort=False)
-        acquisition_img_group = acquisition_group.make_group("images", abort=False)
+        ag  = h5_object.make_group("acquisition", abort=False)
+        aig = ag.make_group("images", abort=False)
         for k in  dict.keys():
             if re.search("description", k):
-                acquisition_img_group.set_custom_dataset("description", dict[k])
+                aig.set_custom_dataset("description", dict[k])
             elif not k.split(".")[-1] == "attrs":
                 name = k.split(".")[-1]
-                attrs = attrs=dict[k + ".attrs"]
-                attrs["ancestry"] = np.array(["image_X"])
-                h5_object.set_dataset("<image_X>", dict[k], name=name,\
-                           dtype='uint8', attrs=attrs)
+                attrs = {}
+                if k + ".attrs" in dict.keys():
+                    attrs = dict[k + ".attrs"]
+                if re.search("fov_", k):
+                    h5_object.set_dataset("<image_X>", dict[k], name=name,\
+                                          dtype='uint8', attrs=attrs)
+                else:
+                    try:
+                        aig.set_dataset(dict[k], name=name, attrs=attrs)
+                    except:
+                        aig.set_custom_dataset(dict[k], name=name, attrs=attrs)
+                
         if verbose:
             print "Creating partial NWB file: ", os.path.join(project_dir, string+ ".h5")
         h5_object.close() 
@@ -74,40 +84,56 @@ class Dict2NWB(object):
         h5_object = self.initialize_h5_object(os.path.join(project_dir, string+ ".h5"), dict)
         if len(string.split(".")) == 3:
             # behavioral time series
+            # string = acquisition.timeseries.<data_name>
             series_name = string.split(".")[-1]
-            series_type = dict[string + ".attrs"]["series_type"]
+            if string + ".attrs" in dict.keys() and \
+               "series_type" in dict[string + ".attrs"].keys():
+                series_type = dict[string + ".attrs"]["series_type"]
+            else:   
+                series_type = '<TimeSeries>'
             series_path = "/acquisition/timeseries"
-            tsg = h5_object.make_group(series_type, series_name, path = series_path, \
-                              attrs = dict[string + ".attrs"])
+            attrs = {"series_type" : "<TimeSeries>"}
+            if string + ".attrs" in dict.keys():
+                attrs = dict[string + ".attrs"]
+            series_type = '<TimeSeries>'
+            tsg = h5_object.make_group(series_type, series_name, path = series_path, attrs = attrs)
             for k in dict.keys():
-                if re.search("attr", k):
-                    continue
-                dataset_name = k.split(".")[-1]
-                if dataset_name == "data":
-                    tsg.set_dataset(dataset_name, dict[string + "." + dataset_name], attrs=dict[string + ".data_attrs"])
-                elif dataset_name in ["timestamps", "num_samples"]:
-                    tsg.set_dataset(dataset_name, dict[string + "." + dataset_name])
-                else:
-                    tsg.set_custom_dataset(dataset_name, dict[string + "." + dataset_name])
+                if len(k.split(".")) == len(string.split(".")) + 1:
+                    name = k.split(".")[-1]
+                    attrs = {}
+                    if k + ".attrs" in dict.keys():
+                        attrs = dict[k + ".attrs"]
+                    if not name == "attrs":
+                        try: 
+                            tsg.set_dataset(name, dict[k], attrs = attrs)
+                        except:
+                            tsg.set_custom_dataset(name, dict[k], attrs = attrs)
         elif len(string.split(".")) == 2:
             # image time series - ophys data only     
-            path0 = "acquisition.timeseries."
+            # string = acquisition.timeseries
             img_planes = []
             for k in dict.keys():
                 if k.split(".")[-1] == "imaging_plane":
                     img_planes.append(k.split(".")[2])
             for img_plane in img_planes:
-                group_attrs = dict[path0 + "attrs"]
+                group_attrs = {}
+                if string + "." + img_plane + ".attrs" in dict.keys():
+                    group_attrs = dict[string + ".attrs"]
                 twop = h5_object.make_group("<TwoPhotonSeries>", img_plane, \
                            path='/acquisition/timeseries', attrs=group_attrs)
-                for item in ["format", "external_file", "dimension", "scan_line_rate",\
-                             "field_of_view", "imaging_plane", "timestamps"]:
-                    if item == "external_file":
-                        twop.set_dataset(item, \
-                                  dict[path0 + img_plane +"." + item],\
-                            attrs=dict[path0 + img_plane +"." + item + ".attrs"])
-                    else:
-                        twop.set_dataset(item, dict[path0 + img_plane +"." + item])
+                for k in dict.keys():
+                    if k.split(".")[2] == img_plane and not k.split(".")[-1] == "attrs":
+                        name = k.split(".")[-1]
+                        attrs = {}
+                        if k + ".attrs" in dict.keys():
+                            attrs = dict[k + ".attrs"]
+                        try:
+                            twop.set_dataset(name, dict[k], attrs = attrs)
+                        except:
+                            try:
+                                twop.set_custom_dataset(name, dict[k], attrs = attrs)
+                            except:
+                                pass
         else:
             sys.exit("Unsupported path string " + string)
         if verbose:
@@ -117,19 +143,28 @@ class Dict2NWB(object):
 # ------------------------------------------------------------------------------
 
     def acquisition_timeseries_extracellular_traces(self, string, dict, project_dir):
+        # string = acquisition.timeseries.extracellular_traces
         if debug:
             util.print_dict_keys(dict)          
-        datasets = ["ephys_raw_data"]
 
         h5_object = self.initialize_h5_object(os.path.join(project_dir, string+ ".h5"), dict)
+        group_attrs = {} 
+        if "acquisition.timeseries.extracellular_traces.attrs" in dict.keys():
+            group_attrs = dict["acquisition.timeseries.extracellular_traces.attrs"]
+        print "group_attrs=", group_attrs
         et = h5_object.make_group("<TimeSeries>", "extracellular_traces", path = "/acquisition/timeseries", \
-             attrs = {"description" : "File containing the raw voltage data for this session"})
+                                  attrs = group_attrs)
         for k in  dict.keys():
-            if re.search("ephys_raw_data", k):
-                et.set_dataset("ephys_raw_data", dict[k])
-            elif not re.search("attr", k):
+            if len(k.split(".")) == len(string.split(".")) + 1 and \
+                   not k.split(".")[-1] == "attrs":
                 name = k.split(".")[-1]
-                et.set_custom_dataset(name, dict[k])
+                attrs = {}
+                if k + ".attrs" in dict.keys():
+                    attrs = dict[k + ".attrs"]
+                try:
+                    et.set_dataset(name, dict[k], attrs = attrs)
+                except:
+                    et.set_custom_dataset(name, dict[k], attrs = attrs)
         if verbose:
             print "Creating partial NWB file: ", os.path.join(project_dir, string+ ".h5")
         h5_object.close() 
@@ -137,6 +172,7 @@ class Dict2NWB(object):
 # ------------------------------------------------------------------------------
 
     def analysis(self, string, dict, project_dir):
+        # string = analysis
         if debug:
             util.print_dict_keys(dict)          
         analysis_datasets = ["description", "good_trials", "trial_start_times",\
@@ -144,13 +180,19 @@ class Dict2NWB(object):
 
         h5_object = self.initialize_h5_object(os.path.join(project_dir, string+ ".h5"), dict)
         ag = h5_object.make_group("analysis", abort=False)
+        path = "/" + ag.name
         for k in dict.keys():
-            k1 = k.split(".")[len(k.split("."))-1]
-            if k in analysis_datasets or k1 in analysis_datasets:
+            if not k.split(".")[-1] == "attrs":
+                name = k.split(".")[-1]
+                attrs = {}
+                if k + ".attrs" in dict.keys():
+                    attrs = dict[k + ".attrs"]
                 try:
-                    ag.set_dataset(k1, dict[k])
+                    ag.set_dataset(name, dict[k], attrs = attrs)
                 except:
-                    ag.set_custom_dataset(k1, dict[k])
+                    ag.set_custom_dataset(name, dict[k], attrs = attrs)
+                if not name in analysis_datasets:
+                    print "Warning: creating custom dataset analysis." + name
         if verbose:
             print "Creating partial NWB file: ", os.path.join(project_dir, string+ ".h5")
         h5_object.close() 
@@ -158,6 +200,8 @@ class Dict2NWB(object):
 # ------------------------------------------------------------------------------
 
     def epochs(self, string, dict, project_dir):
+        # string = epochs
+        # no custom datasets are allowed
         if debug:
             util.print_dict_keys(dict)       
         epoch_datasets = ["start_time", "stop_time", "tags", "units_present", \
@@ -166,26 +210,37 @@ class Dict2NWB(object):
         h5_object = self.initialize_h5_object(os.path.join(project_dir, string+ ".h5"), dict)
         eg = h5_object.make_group("epochs", abort=False)
         processed_trials = []
+        tg = {}
         for k in dict.keys():
-            trial = k.split(".")[-2]
-            if trial not in processed_trials:
-                processed_trials.append(trial)
-                start = dict["epochs." + trial + "." + "start_time"]
-                stop  = dict["epochs." + trial + "." + "stop_time"]
-#               epoch = nwb_utils.create_epoch(h5_object, trial, start, stop)
-                epoch = h5_object.make_group("<epoch_X>", trial, attrs = \
-                        {"description" : "Data that belong to " + trial,\
-                         "ancestry" : np.array(["epoch_X"])})
-                epoch.set_dataset("start_time", start)
-                epoch.set_dataset("stop_time",  stop)
-                for k1 in epoch_datasets:
-                    k2 = "epochs." + trial + "." + k1
-                    if k2 not in dict.keys():
-                        continue
-                    if k1 in ["tags", "description"]:
-                        epoch.set_dataset(k1, dict[k2])
-                    elif k1 in ["units_present", "ROIs", "ROI_planes"]:
-                        epoch.set_custom_dataset(k1, dict[k2])
+            if len(k.split(".")) == 2:
+                name = k.split(".")[-1]
+                attrs = {}
+                if k + ".attrs" in dict.keys():
+                    attrs = dict[k + ".attrs"]
+                if not re.search("rial", name):
+                    print "Warning: creating custom dataset epochs." + name
+                    try:
+                        eg.set_dataset(name, dict[k], attrs = attrs)
+                    except:
+                        eg.set_custom_dataset(name, dict[k], attrs = attrs)
+            else:
+                trial = k.split(".")[-2]
+                if trial not in processed_trials:
+                    processed_trials.append(trial)
+                    tg[trial] = h5_object.make_group("<epoch_X>", trial, attrs = \
+                            {"description" : "Data that belong to " + trial,\
+                             "ancestry" : np.array(["epoch_X"])})
+                if len(k.split(".")) == 3 and not k.split(".")[-1] == "attrs":
+                    name = k.split(".")[-1]
+                    attrs = {}
+                    if k + ".attrs" in dict.keys():
+                        attrs = dict[k + ".attrs"]
+                    try:
+                        tg[trial].set_dataset(name, dict[k], attrs = attrs)
+                    except:
+                        tg[trial].set_custom_dataset(name, dict[k], attrs = attrs)
+                    if not name in epoch_datasets:
+                        print "Warning: creating custom dataset epochs." + trial + "." + name
         if verbose:
             print "Creating partial NWB file: ", os.path.join(project_dir, string+ ".h5")
         h5_object.close() 
@@ -193,6 +248,7 @@ class Dict2NWB(object):
 # ------------------------------------------------------------------------------
 
     def general_top_datasets(self, string, dict, project_dir):
+        # string = general.top_datasets
         if debug:
             util.print_dict_keys(dict)       
         top_datasets = ["data_collection", "experiment_description", "experimenter", \
@@ -204,12 +260,16 @@ class Dict2NWB(object):
         h5_object = self.initialize_h5_object(os.path.join(project_dir, string+ ".h5"), dict)
         gg = h5_object.make_group("general", abort=False)
         for k in dict.keys():
-            k1 = k.split(".")[len(k.split("."))-1]
-            if k in top_datasets or k1 in top_datasets:
-                try:
-                    gg.set_dataset(k1, dict[k])
-                except:
-                    gg.set_custom_dataset(k1, dict[k])
+            name = k.split(".")[len(k.split("."))-1]
+            if not name in top_datasets:
+                print "Warning: creating custom dataset general." + name
+            attrs = {}
+            if k + ".attrs" in dict.keys():
+                attrs = dict[k + ".attrs"]
+            try:
+                gg.set_dataset(name, dict[k], attrs = attrs)
+            except:
+                gg.set_custom_dataset(name, dict[k], attrs = attrs)
         if verbose:
             print "Creating partial NWB file: ", os.path.join(project_dir, string+ ".h5")
         h5_object.close() 
@@ -219,12 +279,17 @@ class Dict2NWB(object):
     def general_devices(self, string, dict, project_dir):
         if debug:
             util.print_dict_keys(dict)       
-        device_datasets = ["ephys_acquisition", "photostim_source"]
 
         h5_object = self.initialize_h5_object(os.path.join(project_dir, string+ ".h5"), dict)
         for k in dict.keys():
-            h5_object.set_dataset("<device_X>", dict[k], name=k, \
-                                  attrs={"ancestry" : np.array(["device_X"])})
+            name = k.split(".")[-1]
+            if not name == "attrs":
+                attrs = attrs = {"ancestry" : np.array(["device_X"])}
+                if k + ".attrs" in dict.keys():
+                    attrs = dict[k + ".attrs"]
+                    attrs["ancestry"] = np.array(["device_X"])
+                h5_object.set_dataset("<device_X>", dict[k], name=name, \
+                                      attrs=attrs)
         if verbose:
             print "Creating partial NWB file: ", os.path.join(project_dir, string+ ".h5")
         h5_object.close() 
@@ -232,32 +297,43 @@ class Dict2NWB(object):
 # ------------------------------------------------------------------------------
 
     def general_extracellular_ephys(self, string, dict, project_dir):
+        # string = general.extracellular_ephys
         if debug:
             util.print_dict_keys(dict)       
         extracellular_ephys_datasets = ["ADunit", "electrode_group", "electrode_map", \
                                         "filtering"]
         shank_datasets = ["description", "device", "location"]
-        
         h5_object = self.initialize_h5_object(os.path.join(project_dir, string+ ".h5"), dict)
 
         gg = h5_object.make_group("general", abort=False)
         eeg = gg.make_group("extracellular_ephys", abort=False)
         for k in dict.keys():
-            if k.split(".")[-1] in extracellular_ephys_datasets or\
-               k.split(".")[-2] == "extracellular_ephys":
-               if verbose:
-                   print "Creating dataset ", k.split(".")[-1], " value=", dict[k]
-               eeg.set_dataset(k.split(".")[-1], dict[k])
-                
+            if k.split(".")[-2] == "extracellular_ephys": 
+                data_name = k.split(".")[-1]
+                if not data_name == "attrs":
+                    attrs = {}
+                    if k + ".attrs" in dict.keys():
+                        attrs = dict[k + ".attrs"]
+                    if not data_name in extracellular_ephys_datasets:
+                        print "Warning: creating custom dataset general.extracellular_ephys." + data_name
+                    try:
+                        eeg.set_dataset(data_name, dict[k], attrs=attrs)
+                    except:
+                        eeg.set_custom_dataset(data_name, dict[k], attrs=attrs)
             elif re.search("shank", k.split(".")[-2]):
-                if verbose:
-                    print "Creating group ", k.split(".")[-2]
                 sg = eeg.make_group("<electrode_group_X>", k.split(".")[-2], \
                                     attrs={"ancestry" : np.array(["electrode_group_X"])}, abort=False)
-                if k.split(".")[-1] in shank_datasets:
-                    if verbose:
-                        print "Creating dataset ", k.split(".")[-1], " value=", dict[k]
-                    sg.set_dataset(k.split(".")[-1], dict[k])
+                data_name = k.split(".")[-1]
+                if not data_name == "attrs":
+                    attrs = {}
+                    if k + ".attrs" in dict.keys():
+                        attrs = dict[k + ".attrs"]
+                    if not data_name in shank_datasets:
+                        print "Warning: creating custom dataset general.extracellular_ephys.shank." + data_name
+                    try:
+                        sg.set_dataset(data_name, dict[k], attrs=attrs)
+                    except:
+                        sg.set_custom_dataset(data_name, dict[k], attrs=attrs)
         if verbose:
             print "Creating partial NWB file: ", os.path.join(project_dir, string+ ".h5")
         h5_object.close() 
@@ -274,11 +350,17 @@ class Dict2NWB(object):
         gg = h5_object.make_group("general", abort=False)
         sg = gg.make_group("subject", abort=False)
         for k in dict.keys():
-            if k in subject_datasets or k.split(".")[-1] in subject_datasets:
+            data_name = k.split(".")[-1]
+            if not data_name == "attrs":
+                attrs = {}
+                if k + ".attrs" in dict.keys():
+                    attrs = dict[k + ".attrs"]
+                if not data_name in subject_datasets:
+                    print "Warning: creating custom dataset general.subject." + data_name
                 try:
-                    sg.set_dataset(k.split(".")[-1], dict[k])
+                    sg.set_dataset(data_name, dict[k], attrs=attrs)
                 except:
-                    sg.set_custom_dataset(k.split(".")[-1], dict[k])
+                    sg.set_custom_dataset(data_name, dict[k], attrs=attrs)
         if verbose:
             print "Creating partial NWB file: ", os.path.join(project_dir, string+ ".h5")
         h5_object.close() 
@@ -294,13 +376,34 @@ class Dict2NWB(object):
         gg = h5_object.make_group("general", abort=False)
         og = gg.make_group("optogenetics", abort=False)
         for k in dict.keys():
-            if k.split(".")[-1] in optogenetics_datasets and k.split(".")[-3] == "optogenetics":
+            data_name = k.split(".")[-1]
+            if len(k.split(".")) == 3 and not data_name == "attrs":
+                # Creating custom datasets in group general/optogenetics
+                attrs = {}
+                if k + ".attrs" in dict.keys():
+                    attrs = dict[k + ".attrs"]
+                if not data_name in optogenetics_datasets:
+                    print "Warning: creating custom dataset general.optogenetics." + data_name
+                try:
+                    og.set_dataset(data_name, dict[k], attrs=attrs)
+                except:
+                    og.set_custom_dataset(data_name, dict[k], attrs=attrs)
+
+            if k.split(".")[-3] == "optogenetics":
                 osg = og.make_group("<site_X>", name=k.split(".")[-2], \
                                     attrs={"ancestry" : np.array(["site_X"])}, abort=False)
-                try:
-                    osg.set_dataset(k.split(".")[-1], dict[k])
-                except:
-                    osg.set_custom_dataset(k.split(".")[-1], dict[k])
+                if len(k.split(".")) == 4 and not data_name == "attrs":
+                     # Creating datasets in group general/optogenetics/site_#
+                    attrs = {}
+                    if k + ".attrs" in dict.keys():
+                        attrs = dict[k + ".attrs"]
+                    if not data_name in optogenetics_datasets:
+                        print "Warning: creating custom dataset general.optogenetics." \
+                              + k.split(".")[-2] + "." + data_name
+                    try:
+                        osg.set_dataset(data_name, dict[k], attrs=attrs)
+                    except:
+                        osg.set_custom_dataset(data_name, dict[k], attrs=attrs)
         if verbose:
             print "Creating partial NWB file: ", os.path.join(project_dir, string+ ".h5")
         h5_object.close() 
@@ -314,27 +417,34 @@ class Dict2NWB(object):
         gg = h5_object.make_group("general", abort=False)
         op = gg.make_group("optophysiology", abort=False)
         for k in dict.keys():
-            if not re.search("fov_", k) and len(k.split(".")) == 3 and re.search("description", k):
-                op.set_custom_dataset("description", dict[k])
-            elif re.search("fov_", k) and not re.search("channel_", k):
-                name_group = k.split(".")[2]
-                img_plane_group = op.make_group("<imaging_plane_X>", name_group, \
-                                                attrs = {"ancestry" : np.array(["imaging_plane_X"])}, abort=False)
-                name_data = k.split(".")[3]
-                if not re.search("attrs", k):
-                    if name_data == "manifold":
-                        img_plane_group.set_dataset(name_data, dict[k], attrs = dict[k + ".attrs"])
+            data_name = k.split(".")[-1]
+            if not data_name == "attrs":
+                attrs = {}
+                if k + ".attrs" in dict.keys():
+                    attrs = dict[k + ".attrs"]
+                if not re.search("fov_", k) and len(k.split(".")) == 3:
+                    # Creating description and custom datasets in general/optophysiology
+                    try:
+                        op.set_dataset(data_name, dict[k], attrs = attrs)
+                    except:
+                        op.set_custom_dataset(data_name, dict[k], attrs = attrs)
+                elif re.search("fov_", k):
+                    group_name = k.split(".")[2]
+                    img_plane_group = op.make_group("<imaging_plane_X>", group_name, \
+                                                    attrs = {"ancestry" : np.array(["imaging_plane_X"])}, abort=False)
+                    if not re.search("channel_", k):
+                        try:
+                            img_plane_group.set_dataset(data_name, dict[k], attrs = attrs)
+                        except:
+                            img_plane_group.set_custom_dataset(data_name, dict[k], attrs = attrs)
                     else:
-                        img_plane_group.set_dataset(name_data, dict[k])
-            elif re.search("fov_", k) and re.search("channel_", k):
-                name_group = k.split(".")[2]
-                img_plane_group = op.make_group("<imaging_plane_X>", name_group, \
-                                      attrs = {"ancestry" : np.array(["imaging_plane_X"])}, abort=False)
-                name_channel = k.split(".")[3]
-                channel_group = img_plane_group.make_group("<channel_X>", name_channel, \
-                                    attrs = {"ancestry" : np.array(["channel_X"])}, abort=False)
-                name_data = k.split(".")[4]
-                channel_group.set_dataset(name_data, dict[k])
+                        name_channel = k.split(".")[3]
+                        channel_group = img_plane_group.make_group("<channel_X>", name_channel, \
+                                            attrs = {"ancestry" : np.array(["channel_X"])}, abort=False)
+                        try:
+                            channel_group.set_dataset(data_name, dict[k], attrs = attrs)
+                        except:
+                            channel_group.set_custom_dataset(data_name, dict[k], attrs = attrs)
         if verbose:
             print "Creating partial NWB file: ", os.path.join(project_dir, string+ ".h5")
         h5_object.close() 
@@ -358,27 +468,38 @@ class Dict2NWB(object):
             util.print_dict_keys(dict)       
         h5_object = self.initialize_h5_object(os.path.join(project_dir, string+ ".h5"), dict)
         module_name = "extracellular_units"
-        mod = h5_object.make_group("<Module>", module_name, attrs={"ancestry" : "<Module>"})
+        module_attrs = {"ancestry" : "<Module>"}
+        if "processing.extracellular_units.attrs" in dict.keys():
+            module_attrs = dict["processing.extracellular_units.attrs"]
+            module_attrs["ancestry"] = "<Module>"
+        mod = h5_object.make_group("<Module>", module_name, attrs=module_attrs)
+        group_attrs = {}
+        if "processing.extracellular_units.UnitTimes.attrs" in dict.keys():
+            group_attrs = dict["processing.extracellular_units.UnitTimes.attrs"]
+        spk_times_iface = mod.make_group("UnitTimes", attrs=group_attrs)
 
-        spk_times_iface = mod.make_group("UnitTimes")
-        spk_times_iface.set_attr("source", dict[string + ".attrs"]["source"])
-
-        processed_units = []
-
+        spk = {}
         for k in dict.keys():
-            unit = k.split(".")[-2]
-            if unit not in processed_units \
-                and not re.search("attr", k)  \
-                and not re.search("cell_types", k):             
-                processed_units.append(unit)
-                path = string + "." + unit
-                spk = spk_times_iface.make_group("<unit_N>", unit, \
-                                                 attrs={"ancestry" : np.array(["<unit_N>"])})
-                spk.set_custom_dataset("times",            dict[path + ".times"])
-                spk.set_custom_dataset("source",           dict[path + ".source"])
-                spk.set_custom_dataset("trial_ids",        dict[path + ".trial_ids"])
-                spk.set_custom_dataset("unit_description", dict[path + ".unit_description"])
-        spk_times_iface.set_custom_dataset("cell_types",   dict[string + ".cell_types"])
+            data_name = k.split(".")[-1]
+            if not data_name == "attrs":
+                attrs = {}
+                if k + ".attrs" in dict.keys():
+                    attrs = dict[k + ".attrs"]
+                if len(k.split(".")) == 4:
+                    # Creating dataset cell_types, etc
+                    try:
+                        spk_times_iface.set_dataset(data_name, dict[k], attrs=attrs)
+                    except:
+                        spk_times_iface.set_custom_dataset(data_name, dict[k], attrs=attrs)
+                elif len(k.split(".")) == 5:
+                    unit = k.split(".")[-2]
+                    attrs["ancestry"] = np.array(["<unit_N>"])
+                    spk[unit] = spk_times_iface.make_group("<unit_N>", unit, \
+                                                           attrs=attrs,abort = False)
+                    try:
+                        spk[unit].set_dataset(data_name, dict[k], attrs = attrs)
+                    except:
+                        spk[unit].set_custom_dataset(data_name, dict[k], attrs = attrs)
         if verbose:
             print "Creating partial NWB file: ", os.path.join(project_dir, string+ ".h5")
         h5_object.close() 
@@ -390,26 +511,32 @@ class Dict2NWB(object):
             util.print_dict_keys(dict)       
         h5_object = self.initialize_h5_object(os.path.join(project_dir, string+ ".h5"), dict)
         module_name = "extracellular_units"
-        mod = h5_object.make_group("<Module>", module_name, attrs={"ancestry" : np.array(["Module"])})
+        module_attrs={"ancestry" : np.array(["Module"])}
+        if "processing.extracellular_units.attrs" in dict.keys():
+            module_attrs = dict["processing.extracellular_units.attrs"]
+            module_attrs["ancestry"] = "extracellular_units"
+        mod = h5_object.make_group("<Module>", module_name, attrs=module_attrs)
+        group_attrs = {}
+        if "processing.extracellular_units.EventWaveform.attrs" in dict.keys():
+            group_attrs = dict["processing.extracellular_units.EventWaveform.attrs"]
+        spk_waves_iface = mod.make_group("EventWaveform", attrs=group_attrs)
 
-        spk_waves_iface = mod.make_group("EventWaveform")
-        spk_waves_iface.set_attr("source", dict[string + ".attrs"]["source"])
-
-        processed_units = []
-
+        spk = {}
         for k in dict.keys():
-            unit = k.split(".")[-2]
-            if not re.search("attr", k) and unit not in processed_units:
-                processed_units.append(unit)
-                path = string + "." + unit
-                spk = spk_waves_iface.make_group("<SpikeEventSeries>", unit)
-                spk.set_attr("source", "---")
-                spk.set_custom_dataset("sample_length", dict[path + ".sample_length"])
-                spk.set_custom_dataset("timestamps",    dict[path + ".timestamps"])
-                spk.set_custom_dataset("data",          dict[path + ".data"])
-                spk.set_custom_dataset("electrode_idx", dict[path + ".electrode_idx"])
-                spk.set_custom_dataset("num_samples",   dict[path + ".num_samples"])
-
+            data_name = k.split(".")[-1]
+            if not data_name == "attrs":
+                attrs = {}
+                if k + ".attrs" in dict.keys():
+                    attrs = dict[k + ".attrs"]
+                if len( k.split(".")) == 5:
+                    unit = k.split(".")[-2]
+                    group_attrs = {"source" : "---"}
+                    spk[unit] = spk_waves_iface.make_group("<SpikeEventSeries>", unit, \
+                                    attrs = group_attrs, abort = False)
+                try:
+                    spk[unit] = spk[unit].set_dataset(data_name, dict[k], attrs = attrs)
+                except:
+                    spk[unit] = spk[unit].set_custom_dataset(data_name, dict[k], attrs = attrs)
         if verbose:
             print "Creating partial NWB file: ", os.path.join(project_dir, string+ ".h5")
         h5_object.close() 
@@ -423,11 +550,17 @@ class Dict2NWB(object):
         module_name = "extracellular_units"
         mod = h5_object.make_group("<Module>", module_name, attrs={"ancestry" : np.array(["Module>"])})
 
-        path = ".".join(string.split(".")[0:-1])
-        mod.set_custom_dataset('description',           dict[path + ".description"])
-        mod.set_custom_dataset('spike_sorting',         dict[path + ".spike_sorting"])
-        mod.set_custom_dataset('identification_method', dict[path + ".identification_method"])
-
+        for k in dict.keys():
+            data_name = k.split(".")[-1]
+            if not data_name == "attrs":
+                attrs = {}
+                if k + ".attrs" in dict.keys():
+                    attrs = dict[k + ".attrs"]
+                if len( k.split(".")) == 3:
+                    try:
+                        mod.set_dataset(data_name, dict[k], attrsc=cattrs)
+                    except:
+                        mod.set_custom_dataset(data_name, dict[k], attrs=attrs)
         if verbose:
             print "Creating partial NWB file: ", os.path.join(project_dir, string+ ".h5")
         h5_object.close() 
@@ -436,11 +569,15 @@ class Dict2NWB(object):
 
     def processing_timeseries(self, string, dict, project_dir):
         if debug:
-            util.print_dict_keys(dict)       
+            util.print_dict_keys(dict)  
+        print "\nstring=", string     
         module_name = string.split(".")[1]
         series_name = string.split(".")[-1]
-        series_type = dict[string + ".attrs"]["series_type"]
-
+        if string + ".attrs" in dict.keys() and \
+           "series_type" in dict[string + ".attrs"].keys():
+            series_type = dict[string + ".attrs"]["series_type"]
+        else:
+            series_type = "<TimeSeries>"
         h5_object = self.initialize_h5_object(os.path.join(project_dir, string+ ".h5"), dict)
         try:
             module_attrs = dict["processing." + module_name + ".attrs"]
@@ -452,9 +589,16 @@ class Dict2NWB(object):
         iface = mod.make_group(string.split(".")[2], attrs=dict[string + ".attrs"])
         tsg   = iface.make_group(series_type, series_name, attrs = dict[string + ".attrs"])
 
-        tsg.set_dataset("data", dict[string + ".data"], attrs=dict[string + ".data.attrs"])
-        tsg.set_dataset("timestamps", dict[string + ".timestamps"])
-        tsg.set_dataset("num_samples", len(dict[string + ".timestamps"]))
+        for k in dict.keys():
+            data_name = k.split(".")[-1]
+            if not data_name == "attrs" and len(k.split(".")) == 5:
+                attrs = {}
+                if k + ".attrs" in dict.keys():
+                    attrs = dict[k + ".attrs"]
+                try:
+                    tsg.set_dataset(data_name, dict[k], attrs=attrs)
+                except:
+                    tsg.set_custom_dataset(data_name, dict[k], attrs=attrs)
 
         if verbose:
             print "Creating partial NWB file: ", os.path.join(project_dir, string+ ".h5")
@@ -467,7 +611,12 @@ class Dict2NWB(object):
             util.print_dict_keys(dict)       
         h5_object = self.initialize_h5_object(os.path.join(project_dir, string+ ".h5"), dict)
         h5_object = self.processing_ROIs_DfOverF(h5_object, string + ".DfOverF", dict, project_dir)
-        h5_object = self.processing_ROIs_ImageSegmentation(h5_object, string + ".ImageSegmentation", dict, project_dir)
+        dict2 = {}
+        for k in dict.keys():
+            if re.search("ImageSegmentation", k):
+                dict2[k] = dict[k]
+        h5_object = self.processing_ROIs_ImageSegmentation(h5_object, string + ".ImageSegmentation", \
+                         dict2, project_dir)
         if verbose:
             print "Creating partial NWB file: ", os.path.join(project_dir, string+ ".h5")
         h5_object.close() 
@@ -480,28 +629,33 @@ class Dict2NWB(object):
 
         mod = h5_object.make_group("<Module>", module_name, \
                                    attrs ={"ancestry" : np.array(["Module"])})
-        mod.set_custom_dataset("description", dict["processing.ROIs.description"])
-        dff_iface = mod.make_group("DfOverF", attrs=dict[string + ".attrs"])
-        string2   = "processing.ROIs.ImageSegmentation"
-        seg_iface = mod.make_group("ImageSegmentation", 
-                    attrs=dict[string2 + ".attrs"])
-        processed_img_planes = []
+        img_plane_group = {}
         for k in dict.keys():
-            if re.search("fov_", k):
-                img_plane = k.split(".")[3]
-                if img_plane in processed_img_planes:
-                    continue
-                processed_img_planes.append(img_plane)
-                img_plane_group = dff_iface.make_group("<RoiResponseSeries>", img_plane, \
+            data_name = k.split(".")[-1]
+            if not data_name == "attrs":
+                attrs = {}
+                if k + ".attrs" in dict.keys():
+                    attrs = dict[k + ".attrs"]
+                if len(k.split(".")) == 3:
+                    try:
+                        mod.set_dataset(data_name, dict[k], attrs = attrs) # description etc.
+                    except:
+                        mod.set_custom_dataset(data_name, dict[k], attrs = attrs)
+                elif len(k.split(".")) == 5 and re.search("fov_", k) and \
+                     re.search("DfOverF", k):
+                    group_attrs  = dict[string + ".attrs"]
+                    dff_iface = mod.make_group("DfOverF", attrs=group_attrs, abort = False)
+                    string2 = "processing.ROIs.ImageSegmentation"
+                    group_attrs2 = dict[string2 + ".attrs"]
+                    seg_iface = mod.make_group("ImageSegmentation", attrs=group_attrs2, abort = False)
+                    img_plane = k.split(".")[3]
+                    img_plane_group[img_plane] = dff_iface.make_group("<RoiResponseSeries>", img_plane, \
                                                     abort=False)
-                path0 = string + "." + img_plane
-                img_plane_group.set_dataset("data", dict[path0 + ".data"], attrs = \
-                                         dict[path0 + ".data.attrs"])
-                img_plane_group.set_dataset("timestamps", dict[path0 + ".timestamps"])
-                img_plane_group.set_dataset("num_samples", len(dict[path0 + ".timestamps"]))
-                img_plane_group.set_dataset("roi_names",  dict[path0 + ".roi_names"])
-                img_plane_group.set_custom_dataset("trial_ids",  dict[path0 + ".trial_ids"])
-                img_plane_group.make_group("segmentation_interface", seg_iface)
+                    img_plane_group[img_plane].make_group("segmentation_interface", seg_iface, abort = False)
+                    try:
+                        img_plane_group[img_plane].set_dataset(data_name, dict[k], attrs = attrs)
+                    except:
+                        img_plane_group[img_plane].set_custom_dataset(data_name, dict[k], attrs = attrs)
         return h5_object
 
 # ------------------------------------------------------------------------------
@@ -513,19 +667,28 @@ class Dict2NWB(object):
         mod = h5_object.make_group("<Module>", module_name, attrs ={"ancestry" : "<Module>"}, abort=False)
         seg_iface = mod.make_group("ImageSegmentation", attrs=dict[string + ".attrs"], abort=False)
         processed_img_planes = []
-#       util.print_dict_keys(dict)       
+        img_plane_group = {}
+#       util.print_dict_keys(dict)
         for k in dict.keys():
             if re.search("fov_", k):
                 img_plane = k.split(".")[3]
+                img_plane_group[img_plane] = seg_iface.make_group("<image_plane>", img_plane, \
+                                                    attrs = {"ancestry" : np.array(["image_plane"])}, abort=False)
+                data_name = k.split(".")[-1]
+                if not data_name == "attrs" and not re.search("ref_im", k):
+                    attrs = {}
+                    if k + ".attrs" in dict.keys():
+                        attrs = dict[k + ".attrs"]
+                    if len(k.split(".")) == 5:
+                        try:
+                            img_plane_group[img_plane].set_dataset(data_name, dict[k], attrs = attrs)
+                        except:
+                            img_plane_group[img_plane].set_custom_dataset(data_name, dict[k], attrs = attrs)
+
                 if img_plane in processed_img_planes:
                     continue
                 processed_img_planes.append(img_plane)
-                img_plane_group = seg_iface.make_group("<image_plane>", img_plane, \
-                                                    attrs = {"ancestry" : np.array(["image_plane"])}, abort=False)
                 path0 = string + "." + img_plane
-                img_plane_group.set_dataset("description", dict[path0 + ".description"])
-                img_plane_group.set_dataset("imaging_plane_name", dict[path0 + ".imaging_plane_name"])
-                img_plane_group.set_dataset("roi_list",  dict[path0 + ".roi_ids"])
                 try:
                     nwb_utils.add_reference_image(seg_iface, img_plane, "%s_0001"%img_plane, dict[path0 + ".ref_image_green"])
                 except:
@@ -534,10 +697,10 @@ class Dict2NWB(object):
                     nwb_utils.add_reference_image(seg_iface, img_plane, "%s_0002"%img_plane, dict[path0 + ".ref_image_red"])
                 except:
                     print("Warning: cannot store green reference image")
-                
-                roi_ids = dict[path0 + ".roi_ids"]
+
+                roi_ids = dict[path0 + ".roi_list"]
                 for i in range(len(roi_ids)):
-                    roi_id = roi_ids[i]        
+                    roi_id = roi_ids[i]
                     x      = dict[path0 + "." + str(roi_id) + ".x"]
                     weight = dict[path0 + "." + str(roi_id) + ".weight"]
                     pixmap = dict[path0 + "." + str(roi_id) + ".pixmap"]
@@ -549,26 +712,40 @@ class Dict2NWB(object):
 
 # ------------------------------------------------------------------------------
 
-    def stimulus_presentation_timeseries(self, string, dict, project_dir):
+    def stimulus_presentation(self, string, dict, project_dir):
+        print "    string=", string
         if debug:
             util.print_dict_keys(dict)       
         series_name = string.split(".")[-1]
-        series_type = dict[string + ".attrs"]["series_type"]
-
+        series_type = ""
+        group_attrs = {}
+        if string + ".attrs" in dict.keys():
+            group_attrs = dict[string + ".attrs"]
+        else:
+            try:
+                # handle photostimulus_#
+                for k in dict.keys():
+                    if k.split(".")[-1] == "attrs" and len(k.split(".")) == 4:
+                        group_attrs = dict[k]
+            except:
+                pass
+        series_type = group_attrs["series_type"]
         h5_object = self.initialize_h5_object(os.path.join(project_dir, string+ ".h5"), dict)
 
         series_path = "/stimulus/presentation"
         tsg = h5_object.make_group(series_type, series_name, path = series_path, \
-                                  attrs = dict[string + ".attrs"])
-
-        tsg.set_dataset("data", dict[string + ".data"], attrs=dict[string + ".data.attrs"])
-        tsg.set_dataset("timestamps", dict[string + ".timestamps"])
-        tsg.set_dataset("num_samples", len(dict[string + ".timestamps"]))
+                                  attrs = group_attrs)                
         for k in dict.keys():
-            key = k.split(".")[-1]
-            if key not in ["data", "timestamps", "num_samples"] and \
-                   not re.search("attr", key):
-                tsg.set_dataset(key, dict[string + "." + key], attrs=dict[string + ".data.attrs"])
+            if len(k.split(".")) == 4:
+                data_name = k.split(".")[-1]
+                if not data_name == "attrs":
+                    attrs = {}
+                    if k + ".attrs" in dict.keys():
+                        attrs = dict[k + ".attrs"]
+                    try:
+                        tsg.set_dataset(data_name, dict[k], attrs = attrs)
+                    except:
+                        tsg.set_custom_dataset(data_name, dict[k], attrs = attrs)
         if verbose:
             print "Creating partial NWB file: ", os.path.join(project_dir, string+ ".h5")
         h5_object.close() 
@@ -584,7 +761,7 @@ def make_partial_nwb(string, dict, project_dir):
          re.search("BehavioralTimeSeries", string) or re.search("BehavioralEvents", string):
             method_name = "processing_timeseries"
     elif re.search("stimulus.presentation", string):
-       method_name = "stimulus_presentation_timeseries"
+       method_name = "stimulus_presentation"
     else:
         if len(string.split(".")) > 0:
             method_name = "_".join(string.split("."))
