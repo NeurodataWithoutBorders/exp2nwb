@@ -1,6 +1,6 @@
-This folder contains a "toy" example that illustrates usage of the code stored in the folder src.
+This folder contains a "toy" example that illustrates the usage of the code stored in the folder src.
 
-The example is stored as a Jupyter notebook and can be run using the Jupyter application.
+The example is implemented as a Jupyter notebook, and can be run using the Jupyter application.
 
 It generates several partial NWB files in folder 'Project_folder' and then assembles them to produce a full-size NWB file named Example.nwb. 
 
