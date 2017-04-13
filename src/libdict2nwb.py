@@ -151,7 +151,6 @@ class Dict2NWB(object):
         group_attrs = {} 
         if "acquisition.timeseries.extracellular_traces.attrs" in dict.keys():
             group_attrs = dict["acquisition.timeseries.extracellular_traces.attrs"]
-        print "group_attrs=", group_attrs
         et = h5_object.make_group("<TimeSeries>", "extracellular_traces", path = "/acquisition/timeseries", \
                                   attrs = group_attrs)
         for k in  dict.keys():
