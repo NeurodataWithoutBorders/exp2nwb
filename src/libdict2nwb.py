@@ -717,38 +717,27 @@ class Dict2NWB(object):
 # ------------------------------------------------------------------------------
 
     def stimulus_presentation(self, string, dict, project_dir):
+        h5_object = self.initialize_h5_object(os.path.join(project_dir, string+ ".h5"), dict)
         if debug:
             util.print_dict_keys(dict)       
-        series_name = string.split(".")[-1]
-        series_type = ""
-        group_attrs = {}
-        if string + ".attrs" in dict.keys():
-            group_attrs = dict[string + ".attrs"]
-        else:
-            try:
-                # handle photostimulus_#
-                for k in dict.keys():
-                    if k.split(".")[-1] == "attrs" and len(k.split(".")) == 4:
-                        group_attrs = dict[k]
-            except:
-                pass
-        series_type = group_attrs["series_type"]
-        h5_object = self.initialize_h5_object(os.path.join(project_dir, string+ ".h5"), dict)
-
         series_path = "/stimulus/presentation"
-        tsg = h5_object.make_group(series_type, series_name, path = series_path, \
-                                  attrs = group_attrs)                
         for k in dict.keys():
             if len(k.split(".")) == 4:
                 data_name = k.split(".")[-1]
                 if not data_name == "attrs":
-                    attrs = {}
+                    group_name = k.split(".")[-2]
+                    # We assume that all groups have attributes
+                    group_attrs = dict[".".join([k.split(".")[0], k.split(".")[1], group_name, "attrs"])]
+                    series_type = group_attrs["series_type"]
+                    tsg = h5_object.make_group(series_type, group_name, path = series_path, \
+                                               attrs = group_attrs, abort=False)
+                    data_attrs = {}
                     if k + ".attrs" in dict.keys():
-                        attrs = dict[k + ".attrs"]
+                        data_attrs = dict[k + ".attrs"]
                     try:
-                        tsg.set_dataset(data_name, dict[k], attrs = attrs)
+                        tsg.set_dataset(data_name, dict[k], attrs = data_attrs)
                     except:
-                        tsg.set_custom_dataset(data_name, dict[k], attrs = attrs)
+                        tsg.set_custom_dataset(data_name, dict[k], attrs = data_attrs)
         if verbose:
             print "Creating partial NWB file: ", os.path.join(project_dir, string+ ".h5")
         h5_object.close() 
