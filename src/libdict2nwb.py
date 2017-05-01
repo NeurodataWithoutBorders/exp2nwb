@@ -57,7 +57,10 @@ class Dict2NWB(object):
         aig = ag.make_group("images", abort=False)
         for k in  dict.keys():
             if re.search("description", k):
-                aig.set_custom_dataset("description", dict[k])
+                try:
+                    aig.set_dataset("description", dict[k])
+                except:
+                    aig.set_custom_dataset("description", dict[k])
             elif not k.split(".")[-1] == "attrs":
                 name = k.split(".")[-1]
                 attrs = {}
@@ -68,9 +71,9 @@ class Dict2NWB(object):
                                           dtype='uint8', attrs=attrs)
                 else:
                     try:
-                        aig.set_dataset(dict[k], name=name, attrs=attrs)
+                        aig.set_dataset(name, dict[k], attrs=attrs)
                     except:
-                        aig.set_custom_dataset(dict[k], name=name, attrs=attrs)
+                        aig.set_custom_dataset(name, dict[k], attrs=attrs)
                 
         if verbose:
             print "Creating partial NWB file: ", os.path.join(project_dir, string+ ".h5")
@@ -151,7 +154,7 @@ class Dict2NWB(object):
         group_attrs = {} 
         if "acquisition.timeseries.extracellular_traces.attrs" in dict.keys():
             group_attrs = dict["acquisition.timeseries.extracellular_traces.attrs"]
-        et = h5_object.make_group("<TimeSeries>", "extracellular_traces", path = "/acquisition/timeseries", \
+        et = h5_object.make_custom_group("extracellular_traces", path = "/acquisition/timeseries", \
                                   attrs = group_attrs)
         for k in  dict.keys():
             if len(k.split(".")) == len(string.split(".")) + 1 and \
@@ -160,10 +163,13 @@ class Dict2NWB(object):
                 attrs = {}
                 if k + ".attrs" in dict.keys():
                     attrs = dict[k + ".attrs"]
-                try:
-                    et.set_dataset(name, dict[k], attrs = attrs)
-                except:
+                if name == "ephys_raw_data":
                     et.set_custom_dataset(name, dict[k], attrs = attrs)
+                else:
+                    try:
+                        et.set_dataset(name, dict[k], attrs = attrs)
+                    except:
+                        et.set_custom_dataset(name, dict[k], attrs = attrs)
         if verbose:
             print "Creating partial NWB file: ", os.path.join(project_dir, string+ ".h5")
         h5_object.close() 
@@ -191,7 +197,7 @@ class Dict2NWB(object):
                 except:
                     ag.set_custom_dataset(name, dict[k], attrs = attrs)
                 if not name in analysis_datasets:
-                    print "Warning: creating custom dataset analysis." + name
+                    print "    Warning: creating custom dataset analysis." + name
         if verbose:
             print "Creating partial NWB file: ", os.path.join(project_dir, string+ ".h5")
         h5_object.close() 
@@ -217,7 +223,7 @@ class Dict2NWB(object):
                 if k + ".attrs" in dict.keys():
                     attrs = dict[k + ".attrs"]
                 if not re.search("rial", name):
-                    print "Warning: creating custom dataset epochs." + name
+                    print "    Warning: creating custom dataset epochs." + name
                     try:
                         eg.set_dataset(name, dict[k], attrs = attrs)
                     except:
@@ -239,7 +245,7 @@ class Dict2NWB(object):
                     except:
                         tg[trial].set_custom_dataset(name, dict[k], attrs = attrs)
                     if not name in epoch_datasets:
-                        print "Warning: creating custom dataset epochs." + trial + "." + name
+                        print "    Warning: creating custom dataset epochs." + trial + "." + name
         if verbose:
             print "Creating partial NWB file: ", os.path.join(project_dir, string+ ".h5")
         h5_object.close() 
@@ -261,7 +267,7 @@ class Dict2NWB(object):
         for k in dict.keys():
             name = k.split(".")[len(k.split("."))-1]
             if not name in top_datasets:
-                print "Warning: creating custom dataset general." + name
+                print "    Warning: creating custom dataset general." + name
             attrs = {}
             if k + ".attrs" in dict.keys():
                 attrs = dict[k + ".attrs"]
@@ -314,7 +320,7 @@ class Dict2NWB(object):
                     if k + ".attrs" in dict.keys():
                         attrs = dict[k + ".attrs"]
                     if not data_name in extracellular_ephys_datasets:
-                        print "Warning: creating custom dataset general.extracellular_ephys." + data_name
+                        print "    Warning: creating custom dataset general.extracellular_ephys." + data_name
                     try:
                         eeg.set_dataset(data_name, dict[k], attrs=attrs)
                     except:
@@ -328,7 +334,7 @@ class Dict2NWB(object):
                     if k + ".attrs" in dict.keys():
                         attrs = dict[k + ".attrs"]
                     if not data_name in shank_datasets:
-                        print "Warning: creating custom dataset general.extracellular_ephys.shank." + data_name
+                        print "    Warning: creating custom dataset general.extracellular_ephys.shank." + data_name
                     try:
                         sg.set_dataset(data_name, dict[k], attrs=attrs)
                     except:
@@ -355,7 +361,7 @@ class Dict2NWB(object):
                 if k + ".attrs" in dict.keys():
                     attrs = dict[k + ".attrs"]
                 if not data_name in subject_datasets:
-                    print "Warning: creating custom dataset general.subject." + data_name
+                    print "    Warning: creating custom dataset general.subject." + data_name
                 try:
                     sg.set_dataset(data_name, dict[k], attrs=attrs)
                 except:
@@ -382,7 +388,7 @@ class Dict2NWB(object):
                 if k + ".attrs" in dict.keys():
                     attrs = dict[k + ".attrs"]
                 if not data_name in optogenetics_datasets:
-                    print "Warning: creating custom dataset general.optogenetics." + data_name
+                    print "    Warning: creating custom dataset general.optogenetics." + data_name
                 try:
                     og.set_dataset(data_name, dict[k], attrs=attrs)
                 except:
@@ -397,7 +403,7 @@ class Dict2NWB(object):
                     if k + ".attrs" in dict.keys():
                         attrs = dict[k + ".attrs"]
                     if not data_name in optogenetics_datasets:
-                        print "Warning: creating custom dataset general.optogenetics." \
+                        print "    Warning: creating custom dataset general.optogenetics." \
                               + k.split(".")[-2] + "." + data_name
                     try:
                         osg.set_dataset(data_name, dict[k], attrs=attrs)
@@ -518,7 +524,8 @@ class Dict2NWB(object):
         group_attrs = {}
         if "processing.extracellular_units.EventWaveform.attrs" in dict.keys():
             group_attrs = dict["processing.extracellular_units.EventWaveform.attrs"]
-        spk_waves_iface = mod.make_group("EventWaveform", attrs=group_attrs)
+        spk_waves_iface = mod.make_group("EventWaveform")
+        spk_waves_iface.set_attr("source", "EventWaveform in this module")
 
         spk = {}
         for k in dict.keys():
@@ -569,7 +576,6 @@ class Dict2NWB(object):
     def processing_timeseries(self, string, dict, project_dir):
         if debug:
             util.print_dict_keys(dict)  
-        print "\nstring=", string     
         module_name = string.split(".")[1]
         series_name = string.split(".")[-1]
         if string + ".attrs" in dict.keys() and \
@@ -667,7 +673,6 @@ class Dict2NWB(object):
         seg_iface = mod.make_group("ImageSegmentation", attrs=dict[string + ".attrs"], abort=False)
         processed_img_planes = []
         img_plane_group = {}
-#       util.print_dict_keys(dict)
         for k in dict.keys():
             if re.search("fov_", k):
                 img_plane = k.split(".")[3]
@@ -691,11 +696,11 @@ class Dict2NWB(object):
                 try:
                     nwb_utils.add_reference_image(seg_iface, img_plane, "%s_0001"%img_plane, dict[path0 + ".ref_image_green"])
                 except:
-                    print("Warning: cannot store red reference image")
+                    print("    Warning: cannot store red reference image")
                 try:
                     nwb_utils.add_reference_image(seg_iface, img_plane, "%s_0002"%img_plane, dict[path0 + ".ref_image_red"])
                 except:
-                    print("Warning: cannot store green reference image")
+                    print("    Warning: cannot store green reference image")
 
                 roi_ids = dict[path0 + ".roi_list"]
                 for i in range(len(roi_ids)):
@@ -712,7 +717,6 @@ class Dict2NWB(object):
 # ------------------------------------------------------------------------------
 
     def stimulus_presentation(self, string, dict, project_dir):
-        print "    string=", string
         if debug:
             util.print_dict_keys(dict)       
         series_name = string.split(".")[-1]
