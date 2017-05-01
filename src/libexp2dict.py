@@ -33,7 +33,7 @@ class Exp2Dict(object):
         elif options.data_type == "ophys": 
             dict["start_time"] = util.find_exp_time(data, options)
             dict["description"]= " "
-            print("Warning: missing experiment description (to be added)")
+            print("    Warning: missing experiment description (to be added)")
         dict["file_name"]      = os.path.join(options.project_dir, "top_datasets.h5")
         dict["identifier"]     = nwb_utils.create_identifier(options.project_dir)
         dict["mode"] = "w"
@@ -315,7 +315,7 @@ class Exp2Dict(object):
                     if options.verbose:
                         print("   key=" + key+ " key1_list="+ str(key1_list))
                     if re.search("tracellular", key) and not "impedance" in key1_list:
-                        dict["general." + key + ".impedance"] = "not recorded"
+                        dict["general." + key + ".impedance"] = ["not recorded"]
                     for key1 in key1_list:
                         if options.verbose:
                             print("      key1="+ key1)
@@ -323,7 +323,7 @@ class Exp2Dict(object):
                             continue
                         elif key1 in ["ADunit", "penetrationN", "groundCoordinates", \
                                       "extracellularDataType", "recordingMarker", \
-                                      "recordingType", "impedance"]:
+                                      "recordingType"]:
                             value1 = util.get_value_pointer_by_path_items(group_pointer, [key, key1, key1])
                             if key1 == "ADunit":
                                 dict["general." + key + ".ADunit"] = str(value1[0])
@@ -338,7 +338,7 @@ class Exp2Dict(object):
                             elif key1 == "recordingType":
                                 dict["general." + key + ".recording_type"]= str(value1[0])
                             elif key1 == "impedance":
-                                dict["general." + key + ".impedance"]= str(value1[0])
+                                dict["general." + key + ".impedance"]= [str(value1[0])]
                         value1 = util.get_value_pointer_by_path_items(group_pointer, [key, key1, key1])
                         if options.verbose:
                             print("      key="+ key+ " key1="+ key1+ " value1="+ str(value1))
@@ -541,7 +541,7 @@ class Exp2Dict(object):
         for i in range(1, (num_shanks+1)):
             for j in range(shank_size):
                 shank.append("shank" + str(i))
-        dict["general.extracellular_ephys.impedance"] = "not recorded"
+        dict["general.extracellular_ephys.impedance"] = ["not recorded"]
         dict["general.extracellular_ephys.electrode_map"] = probe
         dict["general.extracellular_ephys.electrode_group"] = shank
         dict["general.extracellular_ephys.filtering"]  = "Bandpass filtered 300-6K Hz"
@@ -741,7 +741,7 @@ class Exp2Dict(object):
     
         # Populating a dictionary
         series_path = "processing.extracellular_units.EventWaveform"
-        group_attrs = {"source" :  "Data as reported in Nuo's file"}
+        group_attrs = {"source" :  "EventWaveform in this module"} 
         dict[series_path + ".attrs"] = group_attrs
         
         for i in range(unit_num):
@@ -842,9 +842,9 @@ class Exp2Dict(object):
     
         # Populating a dictionary
         series_path = "processing.extracellular_units"
-        dict[series_path + ".description"]            = description
-        dict[series_path + ".spike_sorting"]          = spike_sorting
-        dict[series_path + ".identification_method"]  = ident_meth
+        dict[series_path + ".description"]                = description
+        dict[series_path + ".spike_sorting"]              = spike_sorting
+        dict[series_path + ".identification_method"]      = ident_meth
     
         return dict
     
