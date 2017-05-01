@@ -245,8 +245,6 @@ def assemble_nwb_from_partial_files(project_dir, options):
             groups.pop(-1)
         if options.verbose:
             print "path_str=", path_str, " groups=", groups
-        if not len(groups) == 0:
-            h5_pointer = h5_object["/".join(groups)]
 
         # Sinchronize paths between the input H5 and output NWB files
         curr_h5_path = "/"      
