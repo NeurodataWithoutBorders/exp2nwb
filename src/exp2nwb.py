@@ -33,6 +33,7 @@ def make_nwb_command_line_parser(parser):
     parser.add_option("-d", "--project_dir", dest="project_dir", help="project directory name", default="")
     parser.add_option("-D", "--debug",   action="store_true",  dest="debug", help="output debugging info; don't delete project dir", default=False)
     parser.add_option("-e", "--no_error_handling", action="store_false", dest="handle_errors", help="handle_errors", default=True)
+    parser.add_option("-o", "--output_name", dest="output_name", help="name of the output NWB file", default="<project_dir>.nwb")
     parser.add_option("-r", "--replace", action="store_true", dest="replace", help="if output file exists, replace it", default=False)
     parser.add_option("-s", "--pathstr", dest="path_str", help="dot-separated path string",metavar="path_str",default="")
     parser.add_option("-t", "--type",    dest="data_type", help="specify explicitly: 'ephys' or 'ophys'; otherwise will be determined automatically", default="")
@@ -76,6 +77,7 @@ def produce_partial_nwb(data_path, metadata_path, options):
 
     # Extract (meta)data
     dict = libexp2dict.make_dict(data, metadata, options)
+#   print "dict=", dict
 
     # Populate (meta)data
     if len(dict.keys()) == 0:
@@ -98,14 +100,20 @@ def extract_attrs(attr_pointer):
 # Recursively parse the group tree  in the H5 object
 # and copy its contents to the NWB object
 #
-def update_nwb_object(last_item, curr_nwb_group, curr_h5_path, h5_object, nwb_object):  
+def update_nwb_object(nwb_object, curr_nwb_group, curr_h5_path, h5_object, options):  
     update_object = 1
     if hasattr(h5_object[curr_h5_path], '__dict__'):
-        # Current path in h5_data points to a group    
+        # Current path in h5_object points to a group    
+#       print "Current path in h5_object points to a group, keys=", h5_object[curr_h5_path].keys()
         for k in h5_object[curr_h5_path].keys():
-            curr_h5_path1 = curr_h5_path + "/" + str(k)
-            my_attrs = extract_attrs(h5_object[curr_h5_path1].attrs)
-#           print "curr_h5_path=", curr_h5_path, " k=", k, " my_attrs=", my_attrs
+            if curr_h5_path == "/":
+                curr_h5_path1 = curr_h5_path + str(k)
+            else:
+                curr_h5_path1 = curr_h5_path + "/" + str(k)
+            try:
+                my_attrs = extract_attrs(h5_object[curr_h5_path1].attrs)
+            except:
+                my_attrs = {}
             num_keys = 0
             try:
                 num_keys = len(h5_object[curr_h5_path1].keys())
@@ -116,67 +124,79 @@ def update_nwb_object(last_item, curr_nwb_group, curr_h5_path, h5_object, nwb_ob
 #               print "    Item is a dataset"
                 if k in ["nwb_core.py"]:
                     continue
-                try:
-                    if len(my_attrs.keys()) > 0:
-                        curr_nwb_group.set_dataset(str(k), np.array(h5_object[curr_h5_path1]), attrs=my_attrs, abort=False)
-                    else:
-                        curr_nwb_group.set_dataset(str(k), np.array(h5_object[curr_h5_path1]), abort=False)
-                except:
+                if not curr_h5_path == "/" and re.search("dataset", str(h5_object[curr_h5_path1])):
                     try:
-                        curr_nwb_group.set_custom_dataset(str(k), np.array(h5_object[curr_h5_path1]))
+                        if len(my_attrs.keys()) > 0:
+                            curr_nwb_group.set_dataset(str(k), h5_object[curr_h5_path1].value, attrs=my_attrs)
+                        else:
+                            curr_nwb_group.set_dataset(str(k), h5_object[curr_h5_path1].value)
                     except:
-                        pass
+                        try:
+                            curr_nwb_group.set_custom_dataset(str(k), h5_object[curr_h5_path1].value)
+                        except:
+                            print "Failed to create dataset ", str(k), " value=",  h5_object[curr_h5_path1].value, " in group", curr_nwb_group.name
             else:
-#               print "    Item is a group"
-                # Next-level item is a group
-#               assert(len(h5_object[curr_h5_path1].keys()) > 0)
+                # print "    Item is a group"
                 try:
                     ancestry = "<" + h5_object[curr_h5_path1].attrs["ancestry"][-1] + ">"
                 except:
-                    ancestry = ""
+                    try:
+                        ancestry = "<" + h5_object[curr_h5_path1].attrs["series_type"][-1] + ">"
+                    except:
+                        ancestry = ""
 #               print "ancestry=", ancestry, " k=", k, " curr_h5_path1=", curr_h5_path1, " attrs=", my_attrs
                 if len(ancestry) > 0:
                    try:
                        curr_nwb_group1 = nwb_object(ancestry, str(k), \
                                              path=curr_h5_path, attrs=my_attrs, abort=False)
                    except:
-                       try:
-                           curr_nwb_group1 = curr_nwb_group.make_group(ancestry, str(k), \
-                                                 attrs=my_attrs, abort=False)
-                       except:
+                       if not str(k) in "templates" and not curr_h5_path == "/stimulus/templates":
                            try:
-                               curr_nwb_group1 = curr_nwb_group.make_group(ancestry, str(k), abort=False)
+                               curr_nwb_group1 = curr_nwb_group.make_group(ancestry, str(k), \
+                                                     attrs=my_attrs, abort=False)
                            except:
                                try:
-                                   curr_nwb_group1 = nwb_object.create_group(curr_h5_path)
-#                                  h5_object.copy(curr_h5_path1, nwb_object.file_pointer[curr_h5_path])
+                                   curr_nwb_group1 = curr_nwb_group.make_group(ancestry, str(k), abort=False)
                                except:
-                                   # Group already exists
                                    try:
-                                       curr_nwb_group1 = nwb_object.file_pointer[curr_h5_path1]
+                                       curr_nwb_group1 = nwb_object.create_group(curr_h5_path)
                                    except:
-                                       curr_nwb_group1 = nwb_object.file_pointer[curr_h5_path]
-                               try:
-                                   h5_object.copy(curr_h5_path1, nwb_object.file_pointer[curr_h5_path])
-                               except:
-                                   pass
+                                       # Group already exists
+                                       try:
+                                           curr_nwb_group1 = nwb_object.file_pointer[curr_h5_path1]
+                                       except:
+                                           curr_nwb_group1 = nwb_object.file_pointer[curr_h5_path]
+                                   try:
+                                       h5_object.copy(curr_h5_path1, nwb_object.file_pointer[curr_h5_path])
+                                       update_object = 0
+                                   except:
+                                       pass
                 else:  
-                   try: 
-                       curr_nwb_group1 = curr_nwb_group.make_group(str(k), \
-                                         attrs=extract_attrs(h5_object[curr_h5_path].attrs), abort=False)
-                   except:
-                       try:
-                           curr_nwb_group1 = nwb_object.create_group(curr_h5_path1)
-                           h5_object.copy(curr_h5_path1, curr_nwb_group1)
+                   if not str(k) == "templates" and not curr_h5_path == "/stimulus/templates":
+                       try: 
+                           if not str(k) == "extracellular_traces":
+                               curr_nwb_group1 = curr_nwb_group.make_group(str(k), \
+                                             attrs=my_attrs, abort=False)
+                           else:
+                               print "Creating custom group extracellular_traces"
+                               curr_nwb_group1 = nwb_object.make_custom_group("extracellular_traces", \
+                                                     path = "/acquisition/timeseries", attrs=my_attrs)
+                               print "done"
                        except:
-                           curr_nwb_group1 = nwb_object.file_pointer[curr_h5_path1]
-                nwb_object = update_nwb_object(last_item, curr_nwb_group1, curr_h5_path1, h5_object, nwb_object)
+                           try:
+                               curr_nwb_group1 = nwb_object.create_group(curr_h5_path1)
+                               h5_object.copy(curr_h5_path1, curr_nwb_group1)
+                           except:
+                               curr_nwb_group1 = nwb_object.file_pointer[curr_h5_path1]
+                if re.search("group", str(h5_object[curr_h5_path1])):
+                    if update_object:
+                        nwb_object = update_nwb_object(nwb_object, curr_nwb_group1, curr_h5_path1, h5_object, options)
     else:
-        # Current path in h5_data points to a dataset
+        # Current path in h5_object points to a dataset
         path_items = curr_h5_path.split("/")
         upper_level_path = "/".join(path_items[0:-1])
-        nwb_object.file_pointer[upper_level_path].create_dataset(k, data = np.array(h5_object[curr_h5_path], \
-            attrs=extract_attrs(h5_object[curr_h5_path].attrs)))
+        nwb_object.file_pointer[upper_level_path].set_dataset(k, np.array(h5_object[curr_h5_path]), \
+            attrs=extract_attrs(h5_object[curr_h5_path].attrs))
 #       print " dataset=", curr_h5_path, " attrs=", h5_object[curr_h5_path].attrs.keys()
     return nwb_object
 
@@ -185,79 +205,52 @@ def update_nwb_object(last_item, curr_nwb_group, curr_h5_path, h5_object, nwb_ob
 def assemble_nwb_from_partial_files(project_dir, options):
     # Initialize NWB object
     vargs = {}
+    vargs["file_name"]  = project_dir + ".nwb"
+    if not options.output_name == "<project_dir>.nwb":
+        vargs["file_name"]  = options.output_name
+    vargs["identifier"] = nwb_utils.create_identifier(project_dir)
+    vargs["mode"]       = "w"
+
     try:
         first_infut_file = os.path.join(project_dir, "top_datasets.h5")
         top_h5           = h5py.File(first_infut_file, "r")
-        vargs["file_name"]  = project_dir + ".nwb"
-        vargs["identifier"] = nwb_utils.create_identifier(project_dir)
-        vargs["mode"]       = "w"
         vargs["start_time"] = np.array(top_h5["session_start_time"]).tolist()[0]
         vargs["description"]= np.array(top_h5["session_description"]).tolist()[0]
-        if options.verbose:
-            print "\ndescription=", vargs["description"]
+        top_h5.close()
     except:
-        sys.exit("Could not read info from file " + first_infut_file)
-    top_h5.close()
+        vargs["start_time"] = "session_start_time"
+        vargs["description"]= "session_description"
 
     if os.path.exists(vargs["file_name"]):
         os.remove(vargs["file_name"])
     nwb_object = nwb_file.open(**vargs)
+#   nwb_object.create_group('/acquisition/images')
 
     for file in os.listdir(project_dir):
-        if file == "top_datasets.h5":
-            continue
 
-        
+        if file == "top_datasets.py":
+            pass
+
         path_str = file[0:-3]
         if options.verbose:
             print "\nInput file=", file, " path_str=", path_str, "\n"
 
         file_path = os.path.join(project_dir, file)
-        data_h5 = h5py.File(file_path, "r")
+        h5_object = h5py.File(file_path, "r")
 
         # Create a pointer to the current location in H5 file
         groups = path_str.split(".")
         last_group = groups[-1]
         if last_group == "top_datasets":
             groups.pop(-1)
-        h5_pointer = data_h5["/".join(groups)]
+        if options.verbose:
+            print "path_str=", path_str, " groups=", groups
+        if not len(groups) == 0:
+            h5_pointer = h5_object["/".join(groups)]
 
         # Sinchronize paths between the input H5 and output NWB files
         curr_h5_path = "/"      
-        for i in range(len(groups)):
-            if options.verbose:
-                print "... Creating group ", groups[i], " curr_h5_path=", curr_h5_path
-
-            if curr_h5_path in ["/stimulus/presentation", "/stimulus/templates", "/acquisition/timeseries"]: 
-                # Extract the actual series_type from the partial .h5 file and use that in the nwb_object.make_group
-                group_path = curr_h5_path + "/" + groups[i]
-                ancestry = "<" + data_h5[group_path].attrs["ancestry"][-1] + ">"
-                curr_nwb_group = nwb_object.make_group(ancestry, groups[i], path = curr_h5_path, abort=False)
-            elif curr_h5_path == "/processing":
-                curr_nwb_group = nwb_object.make_group("<Module>", groups[i], abort=False)     
-            elif re.search("/processing/", curr_h5_path):
-                if groups[i] in ["BehavioralEvents", "BehavioralTimeSeries",\
-                                 "DfOverF", "ImageSegmentation", "EventWaveform", "UnitTimes"]:
-                    curr_nwb_group = curr_nwb_group.make_group(groups[i], abort=False)
-                else:
-                    group_path = curr_h5_path + "/" + groups[i]
-                    ancestry = "<" + data_h5[group_path].attrs["ancestry"][-1] + ">"
-                    curr_nwb_group = curr_nwb_group.make_group(ancestry, groups[i]) 
-            else:
-                curr_nwb_group = nwb_object.make_group(groups[i], path = curr_h5_path, abort=False)
-            if options.verbose:
-                print "curr_nwb_group.name=", curr_nwb_group.name
-            if i == 0:
-                curr_h5_path += groups[i]
-            else:
-                curr_h5_path += "/" +  groups[i]
-
-            if options.verbose:
-                print "curr_h5_path=", curr_h5_path
-           
-        # Recoursively parse the groups tree in the H5 file 
-        # and copy its contents to the NWB file
-        nwb_object = update_nwb_object(last_group, curr_nwb_group, curr_h5_path, data_h5, nwb_object)            
+        nwb_object = update_nwb_object(nwb_object, nwb_object, "/", h5_object, options)            
 
     nwb_object.close()
     
@@ -319,8 +312,6 @@ def create_and_assemble_all_partial_files(data_path, metadata_path, options):
     for s in range(len(pstrings)):
         command = "/home/denisovg/work/Karel_Svoboda/exp2nwb.py " + data_path + " " + metadata_path + " " 
         command += " -s " + pstrings[s] + " -d " + options.project_dir
-        if options.verbose:
-            print "Running command: " + command
         os.system(command)
                     
     # Assemble all
@@ -333,7 +324,7 @@ def create_and_assemble_all_partial_files(data_path, metadata_path, options):
 # ------------------------------------------------------------------------------
 
 def check_path_string(path_str):
-    print "\npath_str=", path_str
+#   print "\npath_str=", path_str
     if len(path_str) == 0:
         sys.exit("\nPlease, specify a path string with option -s")
     if path_str not in ["acquisition.timeseries", "acquisition.timeseries.extracellular_traces",\
@@ -357,14 +348,9 @@ if __name__ == "__main__":
     parser = make_nwb_command_line_parser(parser)
     (options, args) = parser.parse_args()
 
-    if options.verbose:
-        print("len(args)=", len(args))
-
     if len(args) == 1 and os.path.isdir(args[0]):
         assemble_nwb_from_partial_files(args[0], options)
     elif len(args) in [1, 2]:
-        if options.verbose:
-            check_path_string(options.path_str)
         if len(options.project_dir) == 0:
             options.project_dir = os.path.basename(args[0]).split(".")[0]
         if not os.path.isdir(options.project_dir):
