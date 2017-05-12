@@ -700,6 +700,8 @@ class Exp2Dict(object):
                 dict[path + image_plane + ".description"]        = image_plane
                 dict[path + image_plane + ".ref_image_red"]      = ref_image_red
                 dict[path + image_plane + ".ref_image_green"]    = ref_image_green
+                dict[path + image_plane + ".ref_image_red.attrs"]   = {"source" : "%s - red"   % oname}
+                dict[path + image_plane + ".ref_image_green.attrs"] = {"source" : "%s - green" % oname}
                 try:
                     ids = tsah["value"]["%d"%(subarea+2)]["imagingPlane"][str(plane+1)]["ids"]
                 except:
