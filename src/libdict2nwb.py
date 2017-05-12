@@ -550,6 +550,7 @@ class Dict2NWB(object):
 # ------------------------------------------------------------------------------
 
     def processing_extracellular_units_top_datasets(self, string, dict, project_dir):
+        print "dict.keys()=", dict.keys()
         if debug:
             util.print_dict_keys(dict)       
         h5_object = self.initialize_h5_object(os.path.join(project_dir, string+ ".h5"), dict)
@@ -694,11 +695,13 @@ class Dict2NWB(object):
                 processed_img_planes.append(img_plane)
                 path0 = string + "." + img_plane
                 try:
-                    nwb_utils.add_reference_image(seg_iface, img_plane, "%s_0001"%img_plane, dict[path0 + ".ref_image_green"])
+                    nwb_utils.add_reference_image(seg_iface, img_plane, "%s_0001"%img_plane, \
+                                                  dict[path0 + ".ref_image_green"], dict[path0 + ".ref_image_green.attrs"]["source"])
                 except:
                     print("    Warning: cannot store red reference image")
                 try:
-                    nwb_utils.add_reference_image(seg_iface, img_plane, "%s_0002"%img_plane, dict[path0 + ".ref_image_red"])
+                    nwb_utils.add_reference_image(seg_iface, img_plane, "%s_0002"%img_plane, \
+                                                  dict[path0 + ".ref_image_red"], dict[path0 + ".ref_image_red.attrs"]["source"])
                 except:
                     print("    Warning: cannot store green reference image")
 
